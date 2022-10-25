@@ -36,7 +36,33 @@ class MultiBandWCS (dict):
     
     #def keys ( self )
 
-class GalexImaging ( object ):
+class Imaging ( object ):
+    def sky2pix ( self, ra, dec, bandpass):
+        coord = np.array([ra,dec]).reshape(1,2)
+        cwcs = self.wcs[bandpass]
+        galex_pixcoord = cwcs.all_world2pix ( coord, 0 ).flatten()
+        return galex_pixcoord
+        
+    def make_cutout ( self, ra, dec, deltaRA, deltaDEC ):
+        #Y,X = np.mgrid[:self._imshape[0],:self._imshape[1]]
+        bands = self.bands
+        
+        width = deltaRA * (self.pixscale/3600.)**-1 # deg * (arcsec/pix * deg/arcsec)**-1
+        height = deltaDEC * (self.pixscale/3600.)**-1 
+        
+        cutout = image.MultiBandImage (bands, [self._galex_zpt(x) for x in bands ], pixscale=self.pixscale)
+        for ix,im in enumerate([self.fuv_im, self.nuv_im]):
+            key = bands[ix]
+            galex_centralcoord = self.sky2pix ( ra, dec, key )
+
+            ymin = int(galex_centralcoord[1] - height/2.)
+            ymax = int(galex_centralcoord[1] + height/2.)
+            xmin = int(galex_centralcoord[0] - width/2.)
+            xmax = int(galex_centralcoord[0] + width/2.)
+            cutout.image[key] = im[0].data[ymin:ymax,xmin:xmax]
+        return cutout
+    
+class GalexImaging ( Imaging ):
     def __init__ ( self, cutout_id,
                   galex_bundle=None, fuv_im=None, nuv_im=None, pixscale=1.5,
                   correct_galacticextinction=True,
@@ -52,6 +78,7 @@ class GalexImaging ( object ):
             self.fuv_im = galex_bundle['fd']
             self.nuv_im = galex_bundle['nd']
         
+        self.bands = ['FUV','NUV']
         
         self.wcs = MultiBandWCS ()
         self.wcs['FUV'] = wcs.WCS ( self.fuv_im[0].header )
@@ -81,33 +108,7 @@ class GalexImaging ( object ):
         else:
             raise KeyError (f"galex band {key} not recognized!")
 
-    def sky2pix ( self, ra, dec, bandpass):
-        coord = np.array([ra,dec]).reshape(1,2)
-        cwcs = self.wcs[bandpass]
-        galex_pixcoord = cwcs.all_world2pix ( coord, 0 ).flatten()
-        return galex_pixcoord
-        
-    def make_cutout ( self, ra, dec, deltaRA, deltaDEC ):
-        #Y,X = np.mgrid[:self._imshape[0],:self._imshape[1]]
-        bands = ['FUV','NUV']
-        
-        width = deltaRA * (self.pixscale/3600.)**-1 # deg * (arcsec/pix * deg/arcsec)**-1
-        height = deltaDEC * (self.pixscale/3600.)**-1 
-        
-        cutout = image.MultiBandImage (['FUV','NUV'], [self._galex_zpt('FUV'),self._galex_zpt("NUV")], pixscale=self.pixscale)
-        for ix,im in enumerate([self.fuv_im, self.nuv_im]):
-            key = bands[ix]
-            galex_centralcoord = self.sky2pix ( ra, dec, key )
-            #yoff = Y - galex_centralcoord[1]
-            #xoff = X - galex_centralcoord[0]            
-            #in_cutout = (abs(yoff)<(height/2.)) & (abs(xoff)<(width/2.))
-            #return in_cutout
-            ymin = int(galex_centralcoord[1] - height/2.)
-            ymax = int(galex_centralcoord[1] + height/2.)
-            xmin = int(galex_centralcoord[0] - width/2.)
-            xmax = int(galex_centralcoord[0] + width/2.)
-            cutout.image[key] = im[0].data[ymin:ymax,xmin:xmax]
-        return cutout
+
             
         
     def do_ephotometry ( self, central_coordinates, catparams, cat_pixscale=0.168, convert_to_hscfluxes=True):
