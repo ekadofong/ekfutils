@@ -29,6 +29,36 @@ class MultiBandImage (object):
         self.image = BoxImage ()
         self.variance = BoxImage ()
         self.mask = BoxImage ()
+        self.wcs = {}
+        
+    def sky2pix ( self, ra, dec, bandpass):
+        coord = np.array([ra,dec]).reshape(1,2)
+        cwcs = self.wcs[bandpass]
+        pixcoord = cwcs.all_world2pix ( coord, 0 ).flatten()
+        return pixcoord
+
+    def make_cutout ( self, ra, dec, deltaRA, deltaDEC ):  
+        '''
+        Produce a cutout of size deltaRA (in deg) and deltaDEC (in deg)
+        '''      
+        bands = self.bands
+        
+        width = deltaRA * (self.pixscale/3600.)**-1 # deg * (arcsec/pix * deg/arcsec)**-1
+        height = deltaDEC * (self.pixscale/3600.)**-1 
+        
+        cutout = MultiBandImage (self.bands, self.zpt, pixscale=self.pixscale)
+        for ix, key in enumerate(bands):
+            centralcoord = self.sky2pix ( ra, dec, key )
+
+            ymin = int(centralcoord[1] - height/2.)
+            ymax = int(centralcoord[1] + height/2.)
+            xmin = int(centralcoord[0] - width/2.)
+            xmax = int(centralcoord[0] + width/2.)
+            
+            cutout.image[key] = self.image[key][ymin:ymax,xmin:xmax]
+            cutout.variance[key] = self.variance[key][ymin:ymax,xmin:xmax]
+            cutout.mask[key] = self.mask[key][ymin:ymax,xmin:xmax]
+        return cutout        
 
 
 def cutout_from_fits ( name, source_name, cutout_dir):    

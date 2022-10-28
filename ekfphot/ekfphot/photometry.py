@@ -42,16 +42,15 @@ class Imaging ( object ):
         cwcs = self.wcs[bandpass]
         galex_pixcoord = cwcs.all_world2pix ( coord, 0 ).flatten()
         return galex_pixcoord
-        
-    def make_cutout ( self, ra, dec, deltaRA, deltaDEC ):
-        #Y,X = np.mgrid[:self._imshape[0],:self._imshape[1]]
+
+    def make_cutout ( self, ra, dec, deltaRA, deltaDEC ):        
         bands = self.bands
         
         width = deltaRA * (self.pixscale/3600.)**-1 # deg * (arcsec/pix * deg/arcsec)**-1
         height = deltaDEC * (self.pixscale/3600.)**-1 
         
         cutout = image.MultiBandImage (bands, [self._galex_zpt(x) for x in bands ], pixscale=self.pixscale)
-        for ix,im in enumerate([self.fuv_im, self.nuv_im]):
+        for ix,im in enumerate(bands):
             key = bands[ix]
             galex_centralcoord = self.sky2pix ( ra, dec, key )
 
@@ -108,8 +107,29 @@ class GalexImaging ( Imaging ):
         else:
             raise KeyError (f"galex band {key} not recognized!")
 
+    def make_cutout ( self, ra, dec, deltaRA, deltaDEC ):
+        '''
+        Keeping GALEX cutout maker separate from base class since the
+        code is already written
+        '''
+        #Y,X = np.mgrid[:self._imshape[0],:self._imshape[1]]
+        bands = self.bands
+        
+        width = deltaRA * (self.pixscale/3600.)**-1 # deg * (arcsec/pix * deg/arcsec)**-1
+        height = deltaDEC * (self.pixscale/3600.)**-1 
+        
+        cutout = image.MultiBandImage (bands, [self._galex_zpt(x) for x in bands ], pixscale=self.pixscale)
+        for ix,im in enumerate([self.fuv_im, self.nuv_im]):
+            key = bands[ix]
+            galex_centralcoord = self.sky2pix ( ra, dec, key )
 
-            
+            ymin = int(galex_centralcoord[1] - height/2.)
+            ymax = int(galex_centralcoord[1] + height/2.)
+            xmin = int(galex_centralcoord[0] - width/2.)
+            xmax = int(galex_centralcoord[0] + width/2.)
+            cutout.image[key] = im[0].data[ymin:ymax,xmin:xmax]
+        return cutout
+    
         
     def do_ephotometry ( self, central_coordinates, catparams, cat_pixscale=0.168, convert_to_hscfluxes=True):
         Y,X = np.mgrid[:self._imshape[0],:self._imshape[1]]
