@@ -32,7 +32,7 @@ for row in timing:
 
 if total_time < (1./60.):
     print ( '%.0f seconds of CPU time used since %s' % (total_time * 3600., date) )
-elif total-time < 1.:
+elif total_time < 1.:
     print ( '%.0f minutes of CPU time used since %s' % (total_time * 60., date) )
 else:
     print ( '%.0f hours of CPU time used since %s' % (total_time, date) )
