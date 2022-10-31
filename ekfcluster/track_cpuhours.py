@@ -5,7 +5,7 @@ import subprocess
 
 # \\ read arguments
 parser = argparse.ArgumentParser ( prog='track_cpuhours.py', description='track YTD cluster usage' )
-parser.add_argument ( '--date', '-d', action='store', default='2022-01-01'
+parser.add_argument ( '--date', '-d', action='store', default='2022-01-01',
                         help='sacct start time')
 args = parser.parse_args ()
 
