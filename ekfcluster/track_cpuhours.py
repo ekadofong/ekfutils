@@ -8,7 +8,9 @@ parser = argparse.ArgumentParser ( prog='track_cpuhours.py', description='track 
 parser.add_argument ( '--date', '-d', action='store', default='2022-01-01',
                         help='sacct start time')
 args = parser.parse_args ()
+print(args)
 date = args['date']
+
 # \\ get sacct output
 cmd = f"sacct -S{date} -oalloccpu,cputime"
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
