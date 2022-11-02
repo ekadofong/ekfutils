@@ -12,7 +12,7 @@ args = parser.parse_args ()
 date = args.date
 
 # \\ get sacct output
-cmd = f"sacct -S{date} -g {args.groupname} -ojobid,alloccpu,cputime,partition"
+cmd = f"sacct -S{date} -g {args.group} -ojobid,alloccpu,cputime,partition"
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 output = p.communicate()[0]
 
