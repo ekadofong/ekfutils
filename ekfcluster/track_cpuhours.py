@@ -26,7 +26,8 @@ for row in timing:
     if len(vals) < 4:
         continue
     partition = vals[3]
-    print(partition)
+    if partition == 'scavenge':
+        continue # \\ do not include time that's been used in the scavenge partition
     ncpu = int(vals[1])
     nhr,nmin,nsec = [ int(x) for x in vals[2].split(':') ]
     ntime = nhr + nmin/60. + nsec/3600.
