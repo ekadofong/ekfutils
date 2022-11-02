@@ -7,11 +7,12 @@ import subprocess
 parser = argparse.ArgumentParser ( prog='track_cpuhours.py', description='track YTD cluster usage' )
 parser.add_argument ( '--date', '-d', action='store', default='2022-01-01',
                         help='sacct start time')
+parser.add_argument ( '--group', '-g', action='store', default='geha', help='group name')
 args = parser.parse_args ()
 date = args.date
 
 # \\ get sacct output
-cmd = f"sacct -S{date} -ojobid,alloccpu,cputime"
+cmd = f"sacct -S{date} -g {args.groupname} -ojobid,alloccpu,cputime,partition"
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 output = p.communicate()[0]
 
@@ -22,9 +23,10 @@ for row in timing:
     vals = row.split()
     # \\ do not double (triple) count due to .batch and .extern
     # \\ jobIDs
-    if '.' in vals[0]:
+    if len(vals) < 4:
         continue
-        
+    partition = vals[3]
+    print(partition)
     ncpu = int(vals[1])
     nhr,nmin,nsec = [ int(x) for x in vals[2].split(':') ]
     ntime = nhr + nmin/60. + nsec/3600.
