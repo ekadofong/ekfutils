@@ -1,10 +1,10 @@
 import setuptools
 
 setuptools.setup (
-    name = 'ekfphot',
+    name = 'ekfstats',
     version='0.0.1',
     author='Erin Kado-Fong',
-    description='handy dandy photometry utils',
+    description='handy dandy stat computations',
     packages=setuptools.find_packages(),
     python_requires='>=3.7'
     )
