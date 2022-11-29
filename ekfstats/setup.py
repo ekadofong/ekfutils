@@ -6,5 +6,5 @@ setuptools.setup (
     author='Erin Kado-Fong',
     description='handy dandy stat computations',
     packages=setuptools.find_packages(),
-    python_requires='>=3.7'
+    #python_requires='>=3.7'
     )
