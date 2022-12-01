@@ -34,7 +34,7 @@ def get_quantile ( xs, ys, alpha ):
     ctrapz = integrate.cumulative_trapezoid(ys,xs)
     return np.interp( alpha, ctrapz, midpts )
 
-def pdf_product ( xA, pdfA, xB, pdfB, npts=100, normalize=True ):
+def pdf_product ( xA, pdfA, xB, pdfB, npts=300, normalize=True ):
     '''
     return an approximation of the probability density function that describes
     the product of two PDFs A & B
@@ -43,13 +43,14 @@ def pdf_product ( xA, pdfA, xB, pdfB, npts=100, normalize=True ):
     probdensity    = cross_then_flat(pdfA,pdfB)
     xmin,xmax = np.quantile(product, [0.,1.])
     domain = np.linspace(xmin,xmax, npts)
+    midpts = 0.5*(domain[:-1]+domain[1:])
 
     assns       = np.digitize ( product, domain )            
-    pdf         = np.array([np.sum(probdensity[assns==x]) for x in np.arange(1, domain.shape[0]+1)])
+    pdf         = np.array([np.sum(probdensity[assns==x]) for x in np.arange(1, domain.shape[0])])
     if normalize:
-        nrml        = np.trapz(pdf, domain)
+        nrml        = np.trapz(pdf, midpts)
         pdf        /= nrml
-    interpfn = build_interpfn( domain, pdf )
+    interpfn = build_interpfn( midpts, pdf )
     return interpfn
 
 def cross_then_flat ( a, b):
@@ -73,4 +74,13 @@ def build_interpfn ( x, y ):
     return fn
 
 def wide_kdeBW ( size, alpha=3. ):
-    bw = alpha*size**(-1./5.)    
+    bw = alpha*size**(-1./5.)  
+    return bw  
+
+def gaussian ( x, A, m, s):
+    if A == 'normalize':
+        A = np.sqrt(2.*np.pi * s**2)**-1    
+    return A * np.exp ( -(x-m)**2 / (2.*s**2) )
+
+def midpts ( bins ):
+    return 0.5*(bins[1:]+bins[:-1])
