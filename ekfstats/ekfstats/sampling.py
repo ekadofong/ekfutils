@@ -34,24 +34,32 @@ def get_quantile ( xs, ys, alpha ):
     ctrapz = integrate.cumulative_trapezoid(ys,xs)
     return np.interp( alpha, ctrapz, midpts )
 
-def pdf_product ( xA, pdfA, xB, pdfB, npts=300, normalize=True ):
+def weighted_quantile ( x, w, qts ):
+    psort = np.argsort(x)
+    cog = np.cumsum(w[psort]) / w.sum()
+    output = np.interp ( qts, cog, x[psort] )
+    return output
+
+def pdf_product ( xA, pdfA, xB, pdfB, npts=100, normalize=True, return_midpts=False, alpha=1e-3 ):
     '''
     return an approximation of the probability density function that describes
     the product of two PDFs A & B
     '''    
     product = cross_then_flat(xA,xB)
     probdensity    = cross_then_flat(pdfA,pdfB)
-    xmin,xmax = np.quantile(product, [0.,1.])
+    xmin,xmax = weighted_quantile ( product, probdensity, [alpha, 1.-alpha] )    
     domain = np.linspace(xmin,xmax, npts)
     midpts = 0.5*(domain[:-1]+domain[1:])
-
     assns       = np.digitize ( product, domain )            
     pdf         = np.array([np.sum(probdensity[assns==x]) for x in np.arange(1, domain.shape[0])])
     if normalize:
         nrml        = np.trapz(pdf, midpts)
         pdf        /= nrml
     interpfn = build_interpfn( midpts, pdf )
-    return interpfn
+    if return_midpts:
+        return midpts, interpfn
+    else:
+        return interpfn
 
 def cross_then_flat ( a, b):
     '''
@@ -61,8 +69,47 @@ def cross_then_flat ( a, b):
     [ b3 ]                
     '''
     return np.asarray(np.matrix(a).T*np.matrix(b)).flatten()
+    
 
-def upsample(x,y, npts=1000):
+def dynamic_upsample ( x, p, N=100 ):
+    # \\ sample wherein high log10(p) points are 
+    # \\ upsampled more
+    def dp_pred ( dx, x ):
+        dp = p(x+dx) - p(x)
+        return dp
+
+    def dp_find ( dx,x ):
+        dp = dp_pred(dx, x)
+        ds_sq = dp**2 + dx**2
+        resid = (ds_opt**2 - ds_sq)**2
+        return resid                
+    # \\ establish uniform spacing along the
+    # \\ line integral;
+    # \\ ds^2 = dx^2 + dp^2
+    # \\ ds^2 = dx^2(1 + (df/dx @ x)^2)
+    dX = x.max() - x.min()
+    dp_vec = np.diff(p(x)) 
+    dx_vec = np.diff(x)
+    ds_vec = np.sqrt(dp_vec**2 + dx_vec**2)
+    dS = np.sum(ds_vec)    
+    ds_opt = dS / N # \\ steps to get along 
+
+    cx = np.zeros(N)
+    cx[0] = x.min()
+    dx_init = dX/N
+    dx_min = dx_init * 0.01
+    for idx in range(1,N):
+        x_i = cx[idx-1]    
+        dpdx_i = dp_pred(dx_init, x_i)/dx_init
+        start = np.sqrt(ds_opt**2 / (1. + dpdx_i**2)) # starting guess fo dx
+        pout = optimize.minimize(dp_find, start, bounds=((dx_min,ds_opt),), args=(x_i,))
+        assert pout.status == 0
+        dx_opt = float(pout.x)
+        cx[idx] = x_i + dx_opt
+    return cx, p(cx)
+    
+    
+def upsample(x,y, npts=3000):
     '''
     simple upsampling
     '''
