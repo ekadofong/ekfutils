@@ -40,6 +40,9 @@ def weighted_quantile ( x, w, qts ):
     output = np.interp ( qts, cog, x[psort] )
     return output
 
+def get_quantile_of_value ( x, val ):
+    return np.interp(val, np.sort(x), np.linspace(0.,1.,x.size))
+
 def pdf_product ( xA, pdfA, xB, pdfB, npts=100, normalize=True, return_midpts=False, alpha=1e-3 ):
     '''
     return an approximation of the probability density function that describes
@@ -47,7 +50,8 @@ def pdf_product ( xA, pdfA, xB, pdfB, npts=100, normalize=True, return_midpts=Fa
     '''    
     product = cross_then_flat(xA,xB)
     probdensity    = cross_then_flat(pdfA,pdfB)
-    xmin,xmax = weighted_quantile ( product, probdensity, [alpha, 1.-alpha] )    
+    xmin,xmax = weighted_quantile ( product, probdensity, [alpha, 1.-alpha] ) 
+    
     domain = np.linspace(xmin,xmax, npts)
     midpts = 0.5*(domain[:-1]+domain[1:])
     assns       = np.digitize ( product, domain )            
