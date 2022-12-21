@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import optimize
 from scipy import interpolate,integrate
+from . import functions
 
 def rejection_sample_fromarray ( x, y, nsamp=10000 ):
     pdf_x = interpolate.interp1d(x,y,bounds_error=False, fill_value=0.)
@@ -124,14 +125,9 @@ def build_interpfn ( x, y ):
     fn = interpolate.interp1d ( x, y, bounds_error=False, fill_value=0. )
     return fn
 
-def wide_kdeBW ( size, alpha=3. ):
-    bw = alpha*size**(-1./5.)  
-    return bw  
-
-def gaussian ( x, A, m, s):
-    if A == 'normalize':
-        A = np.sqrt(2.*np.pi * s**2)**-1    
-    return A * np.exp ( -(x-m)**2 / (2.*s**2) )
+# \\ backwards compatibility
+wide_kdeBW = functions.wide_kdeBW 
+gaussian = functions.gaussian
 
 def midpts ( bins ):
     return 0.5*(bins[1:]+bins[:-1])
