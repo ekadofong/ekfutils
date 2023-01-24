@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+
 def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=None,
                scatter_kwargs={}, **kwargs ):
     if ax is None:
@@ -40,3 +42,4 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         im = ax.scatter ( x, y, c=c, zorder=10, **scatter_kwargs )
         return ax, im
     return ax
+
