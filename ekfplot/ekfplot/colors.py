@@ -5,6 +5,9 @@ import colorsys
 
 
 class ColorBase ( object ):
+    '''
+    A utility class that allows us to change aspects of a color around a base.
+    '''
     def __init__ ( self, color, system='hexcolor' ):
         if system == 'hexcolor':
             self.base = mpc.to_rgb ( color )
@@ -23,7 +26,7 @@ class ColorBase ( object ):
     def lighten ( self, value ):
         hls_color = colorsys.rgb_to_hls ( *self.base )
         lightened = [hls_color[0], max(0.,min(1.,hls_color[1]+value)), hls_color[2] ]
-        print(lightened)
+
         output_rgb = colorsys.hls_to_rgb ( *lightened )
         return output_rgb
         
