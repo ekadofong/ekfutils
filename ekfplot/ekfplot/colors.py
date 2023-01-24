@@ -30,4 +30,11 @@ class ColorBase ( object ):
         output_rgb = colorsys.hls_to_rgb ( *lightened )
         return output_rgb
         
-    
+    def sequential_cmap ( self, end_color='w', end_color_system='mpl_named', reverse=False):
+        end_color = ColorBase ( end_color, end_color_system )
+        if reverse:
+            cmap = mpc.LinearSegmentedColormap.from_list ( 'sequential', [end_color.base,self.base], )
+        else:
+            cmap = mpc.LinearSegmentedColormap.from_list ( 'sequential', [self.base, end_color.base], )
+            
+        return cmap
