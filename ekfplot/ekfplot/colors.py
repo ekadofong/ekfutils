@@ -30,6 +30,11 @@ class ColorBase ( object ):
         output_rgb = colorsys.hls_to_rgb ( *lightened )
         return output_rgb
         
+    @property
+    def complement ( self ):
+        complementary = 1. - np.array(self.base)
+        return tuple(complementary)
+        
     def sequential_cmap ( self, end_color='w', end_color_system='mpl_named', reverse=False):
         end_color = ColorBase ( end_color, end_color_system )
         if reverse:
