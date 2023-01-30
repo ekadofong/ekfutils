@@ -1,9 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def midpoints ( x ):
+    return 0.5*(x[:-1]+x[1:])
 
-
-def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=None,
+def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=None, zorder=9,
                scatter_kwargs={}, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
@@ -36,10 +37,10 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
                     y, 
                     xerr = xerr,
                     yerr = yerr,
-                    zorder=9,
+                    zorder=zorder,
                     **kwargs
                     )
-        im = ax.scatter ( x, y, c=c, zorder=10, **scatter_kwargs )
+        im = ax.scatter ( x, y, c=c, zorder=zorder+1, **scatter_kwargs )
         return ax, im
     return ax
 
