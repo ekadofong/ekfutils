@@ -30,7 +30,9 @@ class ColorBase ( object ):
             max(0.,min(1.,hls_color[1]+dl)), 
             max(0.,min(1.,hls_color[2]+ds)) 
             ]
+        
         modulated = colorsys.hls_to_rgb ( *modulated )
+        modulated = ColorBase ( modulated, system='rgb' )
         return modulated
     
     def lighten ( self, value ):
@@ -43,7 +45,7 @@ class ColorBase ( object ):
     @property
     def complement ( self ):
         complementary = 1. - np.array(self.base)
-        return tuple(complementary)
+        return ColorBase(tuple(complementary), system='rgb')
     
     def evenly_spaced_colors (self, ncolors):
         hsv = colorsys.rgb_to_hsv(*self.base)
