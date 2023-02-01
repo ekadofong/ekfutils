@@ -23,6 +23,11 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
     
     xerr =  np.array([[xhigh - x], [x-xlow]]).reshape(2,-1)    
     yerr =  np.array([[yhigh - y], [y-ylow]]).reshape(2,-1)
+    if np.isnan(xerr).all():
+        xerr = None
+    if np.isnan(yerr).all():
+        yerr = None
+    
     
     if c is None:
         ax.errorbar ( x, 
