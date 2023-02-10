@@ -23,7 +23,7 @@ class ColorBase ( object ):
         else:
             raise KeyError (f'Color system {system} not understood!')
 
-    def modulate ( self, dl, ds ):
+    def modulate ( self, dl=0., ds=0. ):
         hls_color = colorsys.rgb_to_hls ( *self.base )
         modulated = [
             hls_color[0], 
@@ -64,3 +64,5 @@ class ColorBase ( object ):
             cmap = mpc.LinearSegmentedColormap.from_list ( 'sequential', [self.base, end_color.base], )
             
         return cmap
+    
+    
