@@ -49,3 +49,22 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         return ax, im
     return ax
 
+def c_density ( x, y, return_fn=False, **kwargs ):
+    from scipy.stats import gaussian_kde
+    # Calculate the point density    
+    xy = np.vstack([x,y])
+    fn = gaussian_kde(xy, **kwargs)
+    if return_fn:
+        return fn
+    else:
+        z = fn(xy)
+        return z    
+
+def density_scatter ( x, y, cmap='Greys', ax=None, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+    z = c_density(x,y)
+    im = ax.scatter ( x, y, c=z, cmap=cmap, **kwargs )
+    return ax, im
+
+    
