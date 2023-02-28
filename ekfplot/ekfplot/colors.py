@@ -3,6 +3,12 @@ import matplotlib.pyplot as plt
 from matplotlib import colors as mpc
 import colorsys
 
+def my_favorite_colors ():
+    '''
+    Returns a list with my favorite colors
+    '''
+    red_base = ColorBase ( "#f05a4f" )
+    return red_base
 
 class ColorBase ( object ):
     '''
