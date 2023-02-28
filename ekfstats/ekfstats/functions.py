@@ -1,5 +1,11 @@
 import numpy as np
 
+def finite_masker ( arr0, arr1 ):
+    '''
+    Returns a mask that is True where both input arrays 
+    are finite-valued
+    '''
+    return np.isfinite(arr0)&np.isfinite(arr1)
 
 def wide_kdeBW ( size, alpha=3. ):
     bw = alpha*size**(-1./5.)  
