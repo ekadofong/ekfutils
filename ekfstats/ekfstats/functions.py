@@ -12,9 +12,19 @@ def wide_kdeBW ( size, alpha=3. ):
     return bw  
 
 def gaussian ( x, A, m, s):
+    '''
+    1D Gaussian. 
+    '''
     if A == 'normalize':
         A = np.sqrt(2.*np.pi * s**2)**-1    
     return A * np.exp ( -(x-m)**2 / (2.*s**2) )
+
+def sigmoid ( sigmoid_x, bound, k ):
+    '''
+    Sigmoid function.
+    '''
+    sigmoid_y = ( 1. + np.exp(-k*(sigmoid_x - bound)))**-1
+    return sigmoid_y
 
 def schechter ( m, phi_ast, M_ast, alpha ):
     '''                                                                         
