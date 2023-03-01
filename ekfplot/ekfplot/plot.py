@@ -6,6 +6,22 @@ from ekfstats import functions
 def midpoints ( x ):
     return 0.5*(x[:-1]+x[1:])
 
+def adjust_font ( ax, fontsize=15 ):
+    '''
+    Change the fontsize of all lettering on a specific subplot. 
+    From https://stackoverflow.com/questions/3899980/how-to-change-the-font-size-on-a-matplotlib-plot
+    '''
+    items = [   ax.title, 
+                ax.xaxis.label, 
+                ax.yaxis.label, ]
+    items = items + ax.get_xticklabels() + ax.get_yticklabels() 
+    if ax.get_legend() is not None:
+        items = items + ax.get_legend().get_texts ()
+
+    for item in items:
+        item.set_fontsize(fontsize)
+    
+
 def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=None, zorder=9,
                scatter_kwargs={}, xsigma=1., ysigma=1., **kwargs ):
     '''
