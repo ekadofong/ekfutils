@@ -75,7 +75,7 @@ def c_density ( x, y, return_fn=False, **kwargs ):
     Compute gKDE density based on sample
     '''
     # Calculate the point density
-    if x.size < 10:
+    if x.size < 100:        
         return np.ones_like(x)
     xy = np.vstack([x,y])
     fn = gaussian_kde(xy, **kwargs)
@@ -95,6 +95,7 @@ def density_contour (data_x,data_y, ax=None, npts=100, **kwargs):
     fmask = functions.finite_masker ( data_x, data_y )
     data_x = data_x[fmask]
     data_y = data_y[fmask]
+
     gkde = c_density ( data_x,data_y, return_fn=True )
     grid_x = np.linspace(data_x.min(),data_x.max(),npts)
     grid_y = np.linspace(data_y.min(),data_y.max(),npts)    
@@ -115,6 +116,6 @@ def density_scatter ( x, y, cmap='Greys', ax=None, **kwargs ):
     x = x[fmask]
     y = y[fmask]
     z = c_density(x,y)
-    im = ax.scatter ( x, y, c=z, cmap=cmap, **kwargs )
+    im = ax.scatter ( x, y, c=z, cmap=cmap, vmin=0., vmax=z.max(), **kwargs )
     return ax, im
 
