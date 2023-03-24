@@ -136,3 +136,28 @@ gaussian = functions.gaussian
 
 def midpts ( bins ):
     return 0.5*(bins[1:]+bins[:-1])
+
+def binned_quantile ( x, y, bins, qt=0.5, erronqt=False, nresamp=100 ):
+    if isinstance(bins, int):
+        bins = np.linspace( np.nanmin(x), np.nanmax(x), bins )
+    if isinstance(qt, float):
+        qt = [qt]
+    assns = np.digitize ( x, bins )
+    
+    xmid = midpts ( bins )
+    if erronqt:
+        ystats = np.zeros([xmid.size, len(qt), 5])
+    else:
+        ystats = np.zeros([xmid.size, len(qt)])
+        
+    for idx in range(1, bins.size):
+        if erronqt:
+            carr = np.zeros([nresamp, len(qt)])
+            for jdx in range(nresamp):
+                pull = np.random.choice ( y[assns==idx], size=(assns==idx).sum(), replace=True )
+                pulled_ys = np.nanquantile ( pull, qt )
+                carr[jdx] = pulled_ys
+            ystats[idx-1] = np.nanquantile(carr,[0.025,.16,.5,.84,.95], axis=0).T
+        else:
+            ystats[idx-1] = np.nanquantile ( y[assns==idx], qt)
+    return xmid, ystats
