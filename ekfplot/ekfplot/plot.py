@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import patches
 from scipy.stats import gaussian_kde
 from ekfstats import functions, sampling
 
@@ -92,7 +93,7 @@ def c_density ( x, y, return_fn=False, **kwargs ):
         z = fn(xy)
         return z
     
-def density_contour (data_x,data_y, ax=None, npts=100, **kwargs):
+def density_contour (data_x,data_y, ax=None, npts=100, label=None, **kwargs):
     '''
     Draw a contour based on density
     '''
@@ -108,7 +109,17 @@ def density_contour (data_x,data_y, ax=None, npts=100, **kwargs):
     vecx,vecy = np.meshgrid(grid_x, grid_y )
     vecz = gkde((vecx.ravel(),vecy.ravel())).reshape(vecx.shape)
     
-    ax.contour ( vecx, vecy, vecz, **kwargs )
+    im = ax.contour ( vecx, vecy, vecz, **kwargs )
+    if label is not None:
+        if 'cmap' not in kwargs.keys():
+            kwargs['color'] = plt.cm.viridis(0.5)
+        else:
+            if isinstance(kwargs['cmap'], str):
+                kwargs['color'] = getattr(plt.cm,kwargs['cmap'])(0.5)
+            else:
+                kwargs['color'] = kwargs['cmap'](0.5)
+            del kwargs['cmap']
+        ax.plot ( 0, 0, label=label, **kwargs)
     return ax
     
 
@@ -125,7 +136,7 @@ def density_scatter ( x, y, cmap='Greys', ax=None, **kwargs ):
     im = ax.scatter ( x, y, c=z, cmap=cmap, vmin=0., vmax=z.max(), **kwargs )
     return ax, im
 
-def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, **kwargs ):
+def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=None, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)    
     qt = [alpha, 0.5, 1.-alpha]
@@ -137,13 +148,18 @@ def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, **kwargs 
                 xhigh = bins[1:], 
                 ylow=ystat[:,1,1],
                 yhigh=ystat[:,1,3],
+                ax=ax,
+                label=label,
                 **kwargs
-                )        
+                ) 
+        ax.fill_between ( xmid, ystat[:,0,2], ystat[:,2,2], alpha=0.15,**kwargs )       
     else:        
         errorbar ( xmid, ystat[:,1],
                 xlow = bins[:-1],
                 xhigh = bins[1:], 
                 ylow=ystat[:,0],
                 yhigh=ystat[:,2],
+                ax=ax,
+                label=label,
                 **kwargs
                 )
