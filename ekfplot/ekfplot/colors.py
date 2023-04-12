@@ -3,12 +3,17 @@ import matplotlib.pyplot as plt
 from matplotlib import colors as mpc
 import colorsys
 
-def my_favorite_colors ():
+def my_favorite_colors ( mode='standout' ):
     '''
     Returns a list with my favorite colors
     '''
-    red_base = ColorBase ( "#f05a4f" )
-    return red_base
+    if mode == 'standout':
+        base = ColorBase ( "#f05a4f" )
+    elif mode == 'singular':
+        base = ColorBase ('#455ccc')
+    elif mode == 'bold':
+        base = ColorBase ( '#001ac2')
+    return base
 
 class ColorBase ( object ):
     '''
