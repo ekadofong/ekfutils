@@ -29,6 +29,14 @@ def imshow ( im, ax=None, q=0.025, **kwargs ):
     ax.imshow ( im, vmin=vmin, vmax=vmax, **kwargs )
     return ax
 
+def text ( rx, ry, text, ax=None, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+    
+    ax.text ( rx, ry, text, transform=ax.transAxes, **kwargs )
+    return ax
+    
+
 def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=None, zorder=9,
                scatter_kwargs={}, xsigma=1., ysigma=1., **kwargs ):
     '''
@@ -119,7 +127,7 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, **kwargs):
             else:
                 kwargs['color'] = kwargs['cmap'](0.5)
             del kwargs['cmap']
-        ax.plot ( 0, 0, label=label, **kwargs)
+        ax.plot ( 0, 0, label=label, lw=2, **kwargs)
     return ax
     
 
@@ -163,3 +171,4 @@ def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=Non
                 label=label,
                 **kwargs
                 )
+    return xmid, ystat
