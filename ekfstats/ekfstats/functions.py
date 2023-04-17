@@ -1,15 +1,20 @@
 import numpy as np
 
-def finite_masker ( arr0, arr1, inplace=False ):
+def finite_masker ( arr_l, inplace=False ):
     '''
     Returns a mask that is True where both input arrays 
     are finite-valued
     '''
-    mask = np.isfinite(arr0)&np.isfinite(arr1)
+    if not isinstance(arr_l, list):
+        arr_l = [arr_l]
+    mask = np.isfinite(arr_l[0])
+    for arr in arr_l[1:]:
+        mask &= np.isfinite(arr)
     if inplace:
-        masked_arr0 = arr0[mask]
-        masked_arr1 = arr1[mask]
-        return masked_arr0, masked_arr1
+        arr_out = []
+        for arr in arr_l:
+            arr_out.append(arr[mask])
+        return arr_out
     else:
         return mask
 

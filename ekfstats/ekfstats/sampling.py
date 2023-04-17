@@ -1,8 +1,37 @@
 import numpy as np
 from scipy import optimize
 from scipy import interpolate,integrate
+from scipy.stats import gaussian_kde
 from . import functions
 
+def c_density ( x, y, return_fn=False, clean=True, nmax=None, **kwargs ):
+    '''
+    Compute gKDE density based on sample
+    '''
+    # Calculate the point density
+    if x.size < 30:        
+        return np.ones_like(x)
+    if clean:
+        fmask = functions.finite_masker ( [x, y] )
+        if fmask.sum() == 0:
+            raise ValueError ("All inf/nan array encountered")
+        x = x[fmask]
+        y = y[fmask]
+        
+    if nmax is not None:
+        if x.size > nmax:
+            indices = np.random.randint(0, x.size, nmax)
+            x = x[indices]
+            y = y[indices]
+    xy = np.vstack([x,y])
+    fn = gaussian_kde(xy, **kwargs)
+
+    if return_fn:
+        return fn
+    else:
+        z = fn(xy)
+        return z
+    
 def rejection_sample_fromarray ( x, y, nsamp=10000 ):
     pdf_x = interpolate.interp1d(x,y,bounds_error=False, fill_value=0.)
     sample = rejection_sample ( x, pdf_x, nsamp )
