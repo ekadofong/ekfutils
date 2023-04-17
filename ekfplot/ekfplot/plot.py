@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
-from scipy.stats import gaussian_kde
 from ekfstats import functions, sampling
+
 
 def midpoints ( x ):
     return 0.5*(x[:-1]+x[1:])
@@ -38,6 +38,7 @@ def text ( rx, ry, text, ax=None, **kwargs ):
     
 
 def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=None, zorder=9,
+               xerr=None, yerr=None,
                scatter_kwargs={}, xsigma=1., ysigma=1., **kwargs ):
     '''
     Draw errorbars where errors are given by distribution quantiles
@@ -45,25 +46,40 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
     if ax is None:
         ax = plt.subplot(111)
 
-    if xlow is None:
-        xlow = np.NaN
-    if xhigh is None:
-        xhigh = np.NaN
-    if ylow is None:
-        ylow = np.NaN
-    if yhigh is None:
-        yhigh = np.NaN
-
-    if 'fmt' not in kwargs.keys():
-        kwargs['fmt'] = 'o'
-
-    xerr =  np.array([[x-xlow],[xhigh - x]]).reshape(2,-1) * xsigma
-    yerr =  np.array([[y-ylow],[yhigh - y]]).reshape(2,-1) * ysigma
+    if xerr is not None:
+        if (xlow is not None) or (xhigh is not None):
+            raise ValueError ("Both xerr and xlow/xhigh are defined!")
+    if yerr is not None:
+        if (ylow is not None) or (yhigh is not None):
+            raise ValueError ("Both yerr and ylow/yhigh are defined!")    
+    
+    if xerr is None:
+        if xlow is None:
+            xlow = np.NaN
+        if xhigh is None:
+            xhigh = np.NaN
+        xerr =  np.array([[x-xlow],[xhigh - x]]).reshape(2,-1) * xsigma
+    if yerr is None:
+        if ylow is None:
+            ylow = np.NaN
+        if yhigh is None:
+            yhigh = np.NaN            
+        yerr =  np.array([[y-ylow],[yhigh - y]]).reshape(2,-1) * ysigma
     if np.isnan(xerr).all():
         xerr = None
     if np.isnan(yerr).all():
         yerr = None
 
+    if 'marker' in kwargs.keys():
+        kwargs['fmt'] = kwargs['marker']
+        del kwargs['marker']
+    elif 'fmt' not in kwargs.keys():
+        kwargs['fmt'] = 'o'
+        
+    if 'cmap' in kwargs.keys():
+        scatter_kwargs['cmap'] = kwargs['cmap']
+        del kwargs['cmap']
+        
     if c is None:
         ax.errorbar (
                     x,
@@ -85,33 +101,17 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         return ax, im
     return ax
 
-def c_density ( x, y, return_fn=False, **kwargs ):
-    '''
-    Compute gKDE density based on sample
-    '''
-    # Calculate the point density
-    if x.size < 30:        
-        return np.ones_like(x)
-    xy = np.vstack([x,y])
-    fn = gaussian_kde(xy, **kwargs)
-
-    if return_fn:
-        return fn
-    else:
-        z = fn(xy)
-        return z
-    
 def density_contour (data_x,data_y, ax=None, npts=100, label=None, **kwargs):
     '''
     Draw a contour based on density
     '''
     if ax is None:        
         ax = plt.subplot(111)
-    fmask = functions.finite_masker ( data_x, data_y )
+    fmask = functions.finite_masker ( [data_x, data_y] )
     data_x = data_x[fmask]
     data_y = data_y[fmask]
 
-    gkde = c_density ( data_x,data_y, return_fn=True )
+    gkde = sampling.c_density ( data_x,data_y, return_fn=True )
     grid_x = np.linspace(data_x.min(),data_x.max(),npts)
     grid_y = np.linspace(data_y.min(),data_y.max(),npts)    
     vecx,vecy = np.meshgrid(grid_x, grid_y )
@@ -137,10 +137,10 @@ def density_scatter ( x, y, cmap='Greys', ax=None, **kwargs ):
     '''
     if ax is None:
         ax = plt.subplot(111)
-    fmask = functions.finite_masker ( x, y )
+    fmask = functions.finite_masker ( [x, y] )
     x = x[fmask]
     y = y[fmask]
-    z = c_density(x,y)
+    z = sampling.c_density(x,y)
     im = ax.scatter ( x, y, c=z, cmap=cmap, vmin=0., vmax=z.max(), **kwargs )
     return ax, im
 
