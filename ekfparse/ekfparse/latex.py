@@ -1,4 +1,5 @@
 import sys
+import re
 import bibtexparser
 from pylatexenc.latex2text import LatexNodes2Text
 from .journal_names import journal_names
@@ -126,7 +127,12 @@ def format_entry ( entry, tag, etal=True, nauthors=3, ncut=4 ):
       [{fmted_journal}{month} {year}{doi}]'''
     return text
         
-        
-        
+def identify_manuscript_figures ( texfile ):
+    tex = open(texfile,'r').read()
+    # \\ remove commented out code
+    nocomment = re.sub('(?s)^\\\iffalse\{\}.*?\\\\fi\{\}','\n',tex,flags=(re.MULTILINE))
+    nocomment = re.sub('^\%.*', '\n', nocomment, flags=re.MULTILINE )
+    figures = [ x.split('/')[-1] for x in re.findall('(?<=includegraphics).*pdf', nocomment) ]
+    return figures
             
     
