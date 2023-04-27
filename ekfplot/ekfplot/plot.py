@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
+from scipy.integrate import quad
 from ekfstats import functions, sampling
 
 
@@ -29,11 +30,16 @@ def imshow ( im, ax=None, q=0.025, **kwargs ):
     ax.imshow ( im, vmin=vmin, vmax=vmax, **kwargs )
     return ax
 
-def text ( rx, ry, text, ax=None, **kwargs ):
+def text ( rx, ry, text, ax=None, ha=None, va=None, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
     
-    ax.text ( rx, ry, text, transform=ax.transAxes, **kwargs )
+    if ha is None:
+        ha = 'right' if rx > 0.5 else 'left'
+    if va is None:
+        va = 'top' if ry > .5 else 'bottom'
+    
+    ax.text ( rx, ry, text, transform=ax.transAxes, ha=ha, va=va, **kwargs )
     return ax
     
 
@@ -101,7 +107,7 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         return ax, im
     return ax
 
-def density_contour (data_x,data_y, ax=None, npts=100, label=None, **kwargs):
+def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None, **kwargs):
     '''
     Draw a contour based on density
     '''
@@ -111,13 +117,31 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, **kwargs):
     data_x = data_x[fmask]
     data_y = data_y[fmask]
 
-    gkde = sampling.c_density ( data_x,data_y, return_fn=True )
+    gkde = sampling.c_density ( data_x,data_y, return_fn=True, nmin=0 )    
     grid_x = np.linspace(data_x.min(),data_x.max(),npts)
     grid_y = np.linspace(data_y.min(),data_y.max(),npts)    
     vecx,vecy = np.meshgrid(grid_x, grid_y )
     vecz = gkde((vecx.ravel(),vecy.ravel())).reshape(vecx.shape)
+    # \\ np.trapz(np.trapz(vecz, vecx), grid_y) == 1 for a normalized GKDE
+    # \\ dx = np.mean(np.diff(grid_x))
+    # \\ dy = np.mean(np.diff(grid_y))
+    # \\ np.sum(vecz*dx*dy) == 1 for a normalized gKDE
+    if ('levels' in kwargs.keys()) and (quantiles is not None):
+        raise ValueError ("Cannot define both levels and quantiles")
+    elif quantiles is not None:
+        dx = np.mean(np.diff(grid_x))
+        dy = np.mean(np.diff(grid_y))
+        vy = np.sort(vecz.flatten())[::-1]
+        cumulative = np.cumsum(vy*dx*dy)
+        #quantiles = np.array([ quad(lambda x: functions.gaussian(x, 'normalize',0.,1.), -sigma,sigma)[0] for sigma in quantiles])**2
+        quantiles = np.power(quantiles, 2) # \\ need to take the square to line up with 1D 
+        levels = np.sort([ vy[np.argmin(abs(cumulative-qx))] for qx in quantiles ])
+        arr = np.diff(levels) > np.finfo(float).resolution
+        skip = np.sum(~arr)
+        levels = levels[skip:]
+        kwargs['levels'] = levels
     
-    im = ax.contour ( vecx, vecy, vecz, **kwargs )
+    im = ax.contour ( vecx, vecy, vecz, **kwargs )    
     if label is not None:
         if 'cmap' not in kwargs.keys():
             kwargs['color'] = plt.cm.viridis(0.5)
@@ -131,7 +155,7 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, **kwargs):
     return ax
     
 
-def density_scatter ( x, y, cmap='Greys', ax=None, **kwargs ):
+def density_scatter ( x, y, cmap='Greys', ax=None, rasterize=True, **kwargs ):
     '''
     Draw a scatterplot colored by density
     '''
@@ -142,6 +166,7 @@ def density_scatter ( x, y, cmap='Greys', ax=None, **kwargs ):
     y = y[fmask]
     z = sampling.c_density(x,y)
     im = ax.scatter ( x, y, c=z, cmap=cmap, vmin=0., vmax=z.max(), **kwargs )
+    ax.set_rasterization_zorder ( 10 )
     return ax, im
 
 def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=None, **kwargs ):
