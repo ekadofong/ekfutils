@@ -2,14 +2,15 @@ import numpy as np
 from scipy import optimize
 from scipy import interpolate,integrate
 from scipy.stats import gaussian_kde
+from statsmodels.stats.proportion import proportion_confint
 from . import functions
 
-def c_density ( x, y, return_fn=False, clean=True, nmax=None, **kwargs ):
+def c_density ( x, y, return_fn=False, clean=True, nmax=None, nmin=30, **kwargs ):
     '''
     Compute gKDE density based on sample
     '''
     # Calculate the point density
-    if x.size < 30:        
+    if x.size < nmin:        
         return np.ones_like(x)
     if clean:
         fmask = functions.finite_masker ( [x, y] )
@@ -190,3 +191,18 @@ def binned_quantile ( x, y, bins, qt=0.5, erronqt=False, nresamp=100 ):
         else:
             ystats[idx-1] = np.nanquantile ( y[assns==idx], qt)
     return xmid, ystats
+
+
+def classfraction ( x_classa, x_classb, bins=10, add=False, alpha=0.05, method='jeffreys' ):
+    if isinstance(bins, (float,int)):
+        bins = np.linspace ( min(np.nanmin(x_classa),np.nanmin(x_classb)),
+                             max(np.nanmax(x_classa),np.nanmax(x_classb)),
+                             bins )
+    hista, bin_edges = np.histogram(x_classa, bins=bins)
+    histb, _         = np.histogram(x_classb, bins=bins)
+    if add:
+        denom = hista + histb
+    else:
+        denom = histb
+    confidence_interval = proportion_confint ( hista, denom, alpha=alpha, method=method)
+    return bin_edges, hista/denom, confidence_interval
