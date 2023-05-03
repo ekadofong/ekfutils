@@ -167,7 +167,7 @@ gaussian = functions.gaussian
 def midpts ( bins ):
     return 0.5*(bins[1:]+bins[:-1])
 
-def binned_quantile ( x, y, bins, qt=0.5, erronqt=False, nresamp=100 ):
+def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100 ):
     if isinstance(bins, int):
         bins = np.linspace( np.nanmin(x), np.nanmax(x), bins )
     if isinstance(qt, float):
@@ -183,8 +183,15 @@ def binned_quantile ( x, y, bins, qt=0.5, erronqt=False, nresamp=100 ):
     for idx in range(1, bins.size):
         if erronqt:
             carr = np.zeros([nresamp, len(qt)])
-            for jdx in range(nresamp):
-                pull = np.random.choice ( y[assns==idx], size=(assns==idx).sum(), replace=True )
+            indices = np.arange(y.size)[assns==idx] 
+            for jdx in range(nresamp):                                                               
+                if yerr is not None:                    
+                    pull_indices = np.random.choice ( indices, indices.size, replace=True  )                    
+                    u_pull = yerr[pull_indices]
+                    m_pull = y[pull_indices]
+                    pull = np.random.normal(m_pull, u_pull)
+                else:
+                    pull = np.random.choice ( y[assns==idx], size=(assns==idx).sum(), replace=True )
                 pulled_ys = np.nanquantile ( pull, qt )
                 carr[jdx] = pulled_ys
             ystats[idx-1] = np.nanquantile(carr,[0.025,.16,.5,.84,.95], axis=0).T
