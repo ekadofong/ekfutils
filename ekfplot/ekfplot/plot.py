@@ -107,7 +107,7 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         return ax, im
     return ax
 
-def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None, **kwargs):
+def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False, **kwargs):
     '''
     Draw a contour based on density
     '''
@@ -141,7 +141,11 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
         levels = levels[skip:]
         kwargs['levels'] = levels
     
-    im = ax.contour ( vecx, vecy, vecz, **kwargs )    
+    if filled:
+        fn = ax.contourf
+    else:
+        fn = ax.contour
+    im = fn ( vecx, vecy, vecz, **kwargs )    
     if label is not None:
         if 'cmap' not in kwargs.keys():
             kwargs['color'] = plt.cm.viridis(0.5)
@@ -169,11 +173,11 @@ def density_scatter ( x, y, cmap='Greys', ax=None, rasterize=True, **kwargs ):
     ax.set_rasterization_zorder ( 10 )
     return ax, im
 
-def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=None, **kwargs ):
+def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=None, yerr=None, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)    
     qt = [alpha, 0.5, 1.-alpha]
-    xmid, ystat = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt)
+    xmid, ystat = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr)
     
     if erronqt:
         errorbar ( xmid, ystat[:,1,2],
