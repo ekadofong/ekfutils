@@ -201,3 +201,28 @@ def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=Non
                 **kwargs
                 )
     return xmid, ystat
+
+def get_subplot_aspectratio ( ax ):
+    figwidth, figheight = ax.get_figure().get_size_inches ()
+    ax_bbox = ax.get_position ()
+    sp_fracw = ax_bbox.width
+    sp_frach = ax_bbox.height
+    sp_width = figwidth * sp_fracw
+    sp_height = figheight * sp_frach
+    display_aspect = sp_height/sp_width
+    
+    if ax.get_xscale() == 'linear':
+        data_width = np.subtract(*ax.get_xlim())
+    elif ax.get_xscale() == 'log':
+        data_width =  np.subtract(*np.log10(ax.get_xlim()))
+        
+    if ax.get_yscale() == 'linear':
+        data_height = np.subtract(*ax.get_ylim())
+    elif ax.get_yscale() == 'log':
+        data_height = np.subtract(*np.log10(ax.get_ylim()))
+                
+    data_aspect = data_height/data_width
+
+    subplot_aspect = display_aspect/data_aspect
+    return subplot_aspect
+    
