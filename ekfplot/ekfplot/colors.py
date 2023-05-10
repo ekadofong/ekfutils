@@ -55,7 +55,7 @@ class ColorBase ( object ):
         modulated = ColorBase ( modulated, system='rgb' )
         return modulated
     
-    def clarify ( self, alpha_new ):
+    def translucify ( self, alpha_new ):
         updated_base = self.base.copy()
         updated_base[-1] = alpha_new
         new_cb = ColorBase ( updated_base, system='rgba' )
@@ -85,7 +85,7 @@ class ColorBase ( object ):
     def sequential_cmap ( self, end_color='w', end_color_system='mpl_named', reverse=False, fade=1. ):
         end_color = ColorBase ( end_color, end_color_system )
         if fade<1.:
-            end_color = end_color.clarify ( fade )
+            end_color = end_color.translucify ( fade )
             
         if fade:
             end_color_code = end_color
@@ -96,4 +96,13 @@ class ColorBase ( object ):
             
         return cmap
     
-    
+def colormap_from_list ( clist, style='continuous' ):
+    if hasattr(clist[0], 'base'):
+        clist = [x.base for x in clist]
+        
+    if style == 'continuous':
+        cmap = mpc.LinearSegmentedColormap.from_list ( 'continuous_sequential', clist )
+    elif style == 'quantized':
+        cmap = mpc.ListedColormap(clist )
+        
+    return cmap
