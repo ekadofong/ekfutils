@@ -39,6 +39,10 @@ class ColorBase ( object ):
         else:
             raise KeyError (f'Color system {system} not understood!')
 
+    @property
+    def hex_base ( self ):
+        return mpc.rgb2hex(self.rgb_base)
+        
     @property 
     def rgb_base ( self ):
         return self.base[:-1]
