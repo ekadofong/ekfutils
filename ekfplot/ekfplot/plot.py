@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
+from matplotlib import patheffects
 from scipy.integrate import quad
 from ekfstats import functions, sampling
 
@@ -30,7 +31,7 @@ def imshow ( im, ax=None, q=0.025, **kwargs ):
     ax.imshow ( im, vmin=vmin, vmax=vmax, **kwargs )
     return ax
 
-def text ( rx, ry, text, ax=None, ha=None, va=None, **kwargs ):
+def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidth=1., **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
     
@@ -39,7 +40,9 @@ def text ( rx, ry, text, ax=None, ha=None, va=None, **kwargs ):
     if va is None:
         va = 'top' if ry > .5 else 'bottom'
     
-    ax.text ( rx, ry, text, transform=ax.transAxes, ha=ha, va=va, **kwargs )
+    txt = ax.text ( rx, ry, text, transform=ax.transAxes, ha=ha, va=va, **kwargs )
+    if bordercolor is not None:
+        txt.set_path_effects ( [patheffects.withStroke(linewidth=borderwidth, foreground=bordercolor)])
     return ax
     
 
