@@ -226,3 +226,27 @@ def get_subplot_aspectratio ( ax ):
     subplot_aspect = display_aspect/data_aspect
     return subplot_aspect
     
+def pcolor ( x_edges, y_edges, Z, alpha=1., ax=None, cmap='Greys', **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+    if np.isscalar(alpha):
+        ax.pcolor ( 
+            x_edges,
+            y_edges,
+            Z,
+            alpha=alpha,
+            **kwargs
+        )
+    else:
+        if isinstance(cmap, str):
+            cmap = getattr(plt.cm, cmap)
+        norm = plt.Normalize ( np.nanmin(Z), np.nanmax(Z) )
+        
+        for i in range(len(x_edges) - 1):
+            for j in range(len(y_edges) - 1):
+                rect = patches.Rectangle((x_edges[i], y_edges[j]), x_edges[i + 1] - x_edges[i], y_edges[j + 1] - y_edges[j],
+                                facecolor=cmap(norm(Z[j, i])), alpha=alpha[j, i], edgecolor=cmap(norm(Z[j,i])))
+                ax.add_patch(rect)
+        ax.set_xlim ( x_edges[0], x_edges[-1] )
+        ax.set_ylim ( y_edges[0], y_edges[-1] )
+    return ax
