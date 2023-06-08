@@ -110,3 +110,6 @@ def colormap_from_list ( clist, style='continuous' ):
         cmap = mpc.ListedColormap(clist )
         
     return cmap
+
+def colormap_whiteanchor ( colormap, ngrain=100 ):
+    return colormap_from_list( ['w'] + [ colormap(x) for x in np.linspace(0.,1.,ngrain) ] )
