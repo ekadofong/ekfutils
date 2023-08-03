@@ -24,11 +24,11 @@ def adjust_font ( ax, fontsize=15 ):
     for item in items:
         item.set_fontsize(fontsize)
     
-def imshow ( im, ax=None, q=0.025, **kwargs ):
+def imshow ( im, ax=None, q=0.025, origin='lower', **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
     vmin,vmax = np.nanquantile(im, [q,1.-q])
-    ax.imshow ( im, vmin=vmin, vmax=vmax, **kwargs )
+    ax.imshow ( im, vmin=vmin, vmax=vmax, origin=origin, **kwargs )
     return ax
 
 def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidth=1., **kwargs ):
