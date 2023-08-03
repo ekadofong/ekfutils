@@ -4,8 +4,10 @@ import urllib
 from xml.etree import ElementTree as ET
 import numpy as np
 from astropy.io import fits
+from astropy import wcs
 from astropy import units as u
 from astropy import table
+from astropy.nddata import Cutout2D
 from astroquery.mast import Observations
 
 def get_SandFAV ( ra, dec, region_size = 2., Rv = 3.1, verbose=False):
@@ -196,16 +198,48 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         
         intmap = fits.open ( f'{datadir}/{name}/{prefix}-{band_names[ix]}-int.fits.gz')
         rrhr = fits.open ( f'{datadir}/{name}/{prefix}-{band_names[ix]}-rrhr.fits.gz')
-        skybg = fits.open ( f'{datadir}/{name}/{prefix}-{band_names[ix]}-skybg.fits.gz')
+        _skybg = fits.open ( f'{datadir}/{name}/{prefix}-{band_names[ix]}-skybg.fits.gz')
+        #skybg[0].name = 'SKYBG'
+        skybg = fits.ImageHDU(_skybg[0].data, _skybg[0].header, name='SKYBG')
         
-        skybg.name = 'SKYBG'
+        intmap[0].name = 'INTENSITY'
         
-        cts = intmap[0].data * rrhr[0].data        
+        # -----------------
+        # -- Make cutout --
+        # -----------------
+        cutout_wcs = wcs.WCS ( intmap[0] )
+        #pixscale = cutout_wcs.pixel_scale_matrix[1,1]*3600. # arcsec / pix
+        #pixcenter = cutout_wcs.wcs_world2pix ( np.array([center]), 1 )[0].astype(int)
+        
+        #sw_pix = sw / pixscale
+        #sh_pix = sh / pixscale
+        
+        #slice_a0 = slice ( pixcenter[1]-sh, pixcenter[1]+sh )
+        #slice_a1 = slice ( pixcenter[0]-sw, pixcenter[0]+sw )        
+                  
         # \\ Following McQuinn+2015, this is Poisson error on the cts (var = cts) divided
         # \\ by effective exposure time
+        cts = intmap[0].data * rrhr[0].data      
         variance = fits.ImageHDU ( cts / rrhr[0].data**2, header=intmap[0].header, name='VARIANCE' )
         
-        ofit = fits.HDUList ( [ intmap[0], variance, skybg[0] ] )
+        intmap_cutout = Cutout2D( data=intmap[0].data, position=center, size=[sh,sw], wcs=cutout_wcs )
+        intmap_hdu = fits.PrimaryHDU ( data=intmap_cutout.data, header=intmap_cutout.wcs.to_header(),)
+        variance_cutout = Cutout2D ( variance.data, position=center, size=[sh,sw], wcs=cutout_wcs )
+        variance_hdu = fits.ImageHDU ( data=variance_cutout.data, header=variance_cutout.wcs.to_header(), name='VARIANCE')
+        skybg_cutout = Cutout2D ( skybg.data, position=center, size=[sh,sw], wcs=cutout_wcs )
+        skybg_hdu = fits.ImageHDU ( data=skybg_cutout.data, header=skybg_cutout.wcs.to_header(), name='SKYBG')
+        
+        #new_wcs = intmap_cutout.wcs.to_header ()
+        #intmap[0].data = intmap_cutout
+        #intmap[0].header.update ( new_wcs )
+        #variance.data = Cutout2D ( variance.data, position=center, size=[sh,sw], wcs=cutout_wcs )
+        #variance.header.update ( new_wcs )
+        #skybg.data = Cutout2D ( skybg.data, position=center, size=[sh,sw], wcs=cutout_wcs )
+        #skybg.header.update ( new_wcs )
+        #variance.data = variance.data[slice_a0,slice_a1]
+        #skybg.data = skybg.data[slice_a0,slice_a1]            
+        
+        ofit = fits.HDUList ( [ intmap_hdu, variance_hdu, skybg_hdu ] )
         
         output[band_names[ix]] = ofit
     return output
