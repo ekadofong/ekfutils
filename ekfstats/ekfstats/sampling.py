@@ -167,12 +167,12 @@ gaussian = functions.gaussian
 def midpts ( bins ):
     return 0.5*(bins[1:]+bins[:-1])
 
-def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100 ):
+def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100, return_counts=False ):
     if isinstance(bins, int):
         bins = np.linspace( np.nanmin(x), np.nanmax(x), bins )
     if isinstance(qt, float):
         qt = [qt]
-    assns = np.digitize ( x, bins )
+    assns = np.digitize ( x, bins )    
     
     xmid = midpts ( bins )
     if erronqt:
@@ -180,10 +180,15 @@ def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, n
     else:
         ystats = np.zeros([xmid.size, len(qt)])
         
+    if return_counts:
+        counts = np.zeros(xmid.shape[0], dtype=int)
+    
     for idx in range(1, bins.size):
         if erronqt:
             carr = np.zeros([nresamp, len(qt)])
             indices = np.arange(y.size)[assns==idx] 
+            if return_counts:
+                counts[idx-1] = (assns==idx).sum()
             for jdx in range(nresamp):                                                               
                 if yerr is not None:                    
                     pull_indices = np.random.choice ( indices, indices.size, replace=True  )                    
@@ -197,10 +202,36 @@ def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, n
             ystats[idx-1] = np.nanquantile(carr,[0.025,.16,.5,.84,.95], axis=0).T
         else:
             ystats[idx-1] = np.nanquantile ( y[assns==idx], qt)
+            
+    if return_counts:
+        return xmid, ystats, counts
     return xmid, ystats
 
 
 def classfraction ( x_classa, x_classb, bins=10, add=False, alpha=0.05, method='jeffreys' ):
+    """
+    Compute the class fraction and its confidence interval between two datasets.
+
+    Parameters:
+        x_classa (array-like): The values of the first dataset, typically representing a class A.
+        x_classb (array-like): The values of the second dataset, typically representing a class B.
+        bins (int, array-like, optional): The number of bins or bin edges to use for histogram binning.
+            If int, it represents the number of equal-width bins. If array-like, it provides custom bin edges.
+            Default is 10.
+        add (bool, optional): If True, the fraction of class A and class B will be summed to compute the class fraction.
+            If False, the fraction of class B will be used as the denominator.
+            Default is False.
+        alpha (float, optional): The significance level for the confidence interval. Must be between 0 and 1.
+            Default is 0.05.
+        method (str, optional): The method to compute the confidence interval. Possible values are 'jeffreys' and 'beta'.
+            Default is 'jeffreys'.
+
+    Returns:
+        tuple: A tuple containing three arrays:
+            - bin_edges (array): The bin edges used for histogram binning.
+            - class_fraction (array): The computed class fraction for each bin.
+            - confidence_interval (array): The confidence interval of the class fraction for each bin.
+    """    
     if isinstance(bins, (float,int)):
         bins = np.linspace ( min(np.nanmin(x_classa),np.nanmin(x_classb)),
                              max(np.nanmax(x_classa),np.nanmax(x_classb)),

@@ -54,7 +54,7 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
     '''
     if ax is None:
         ax = plt.subplot(111)
-
+        
     if xerr is not None:
         if (xlow is not None) or (xhigh is not None):
             raise ValueError ("Both xerr and xlow/xhigh are defined!")
@@ -74,6 +74,7 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         if yhigh is None:
             yhigh = np.NaN            
         yerr =  np.array([[y-ylow],[yhigh - y]]).reshape(2,-1) * ysigma
+    
     if np.isnan(xerr).all():
         xerr = None
     if np.isnan(yerr).all():
@@ -176,11 +177,26 @@ def density_scatter ( x, y, cmap='Greys', ax=None, rasterize=True, **kwargs ):
     ax.set_rasterization_zorder ( 10 )
     return ax, im
 
-def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=None, yerr=None, **kwargs ):
+def running_quantile ( x, 
+                       y, 
+                       bins, 
+                       alpha=0.16, 
+                       ax=None, 
+                       erronqt=False, 
+                       label=None, 
+                       yerr=None, 
+                       erralpha=0.15, 
+                       show_counts=False, 
+                       ytext = 0.3,
+                       **kwargs ):
     if ax is None:
         ax = plt.subplot(111)    
     qt = [alpha, 0.5, 1.-alpha]
-    xmid, ystat = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr)
+    out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
+    if show_counts:
+        xmid, ystat, counts = out
+    else:
+        xmid, ystat = out
     
     if erronqt:
         errorbar ( xmid, ystat[:,1,2],
@@ -192,7 +208,14 @@ def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=Non
                 label=label,
                 **kwargs
                 ) 
-        ax.fill_between ( xmid, ystat[:,0,2], ystat[:,2,2], alpha=0.15,**kwargs )       
+        
+        ypad = np.zeros( [1+ystat.shape[0],2] )
+        ypad[1:,0] = ystat[:,0,2]
+        ypad[1:,1] = ystat[:,2,2]
+        ypad[0,0] = ypad[1,0]
+        ypad[0,1] = ypad[1,1]
+                        
+        ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=erralpha,**kwargs )       
     else:        
         errorbar ( xmid, ystat[:,1],
                 xlow = bins[:-1],
@@ -203,6 +226,12 @@ def running_quantile ( x, y, bins, alpha=0.16, ax=None, erronqt=False, label=Non
                 label=label,
                 **kwargs
                 )
+    
+    if show_counts:
+        yspan = np.subtract(*ax.get_ylim()[::-1])
+        ymin = ax.get_ylim()[0]
+        for idx,xm in enumerate(xmid):
+            ax.text ( xm, ymin + ytext * yspan, counts[idx], ha='center', fontsize=plt.rcParams['font.size']*.5, **kwargs )
     return xmid, ystat
 
 def get_subplot_aspectratio ( ax ):
