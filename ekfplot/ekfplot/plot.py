@@ -31,6 +31,14 @@ def imshow ( im, ax=None, q=0.025, origin='lower', **kwargs ):
     ax.imshow ( im, vmin=vmin, vmax=vmax, origin=origin, **kwargs )
     return ax
 
+def outlined_plot ( x, y,  *args, color='k', lw=4, ax=None, bkgcolor='w', label=None, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+      
+    ax.plot ( x,y, *args, lw=lw, color=bkgcolor, **kwargs )  
+    ax.plot ( x,y, *args, lw=lw*0.5, color=color, label=label, **kwargs )
+    return ax
+
 def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidth=1., **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
