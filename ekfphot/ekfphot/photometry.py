@@ -1,6 +1,7 @@
 from typing import ItemsView
 import numpy as np
 from astropy import wcs
+from ekfparse import query
 from . import image
 
 def galex_cts2flux ( cts, band ):
@@ -34,6 +35,11 @@ class MultiBandWCS (dict):
     def __getitem__ ( self, key):           
         return getattr(self,key)
     
+    def get_pixscale ( self, band ):
+        cwcs = self[band]
+        pixscale = abs(cwcs.pixel_scale_matrix[0,0]) *  3600.
+        return pixscale
+    
     #def keys ( self )
 
 class Imaging ( object ):
@@ -64,8 +70,9 @@ class Imaging ( object ):
 class GalexImaging ( Imaging ):
     def __init__ ( self, cutout_id,
                   galex_bundle=None, fuv_im=None, nuv_im=None, pixscale=1.5,
-                  correct_galacticextinction=True,
-                  gedir='../local_data/',
+                  correct_galacticextinction=True,          
+                  av=None,        
+                  filter_directory='./',
                   verbose=True ):
         # \\ load images
         if (galex_bundle is None) and (fuv_im is None) and (nuv_im is None):
@@ -79,7 +86,7 @@ class GalexImaging ( Imaging ):
         
         self.bands = ['FUV','NUV']
         
-        self.wcs = MultiBandWCS ()
+        self.wcs = MultiBandWCS ()        
         self.wcs['FUV'] = wcs.WCS ( self.fuv_im[0].header )
         self.wcs['NUV'] = wcs.WCS ( self.nuv_im[0].header )
         
@@ -94,7 +101,11 @@ class GalexImaging ( Imaging ):
             
         # \\ set up galactic extinction correction
         if correct_galacticextinction:
-            self.ge = image.GalacticExtinction ( f'{gedir}/extinction.tbl')
+            if av is None:
+                cutout_size = self.nuv_im[0].shape
+                center = self.wcs['NUV'].all_pix2world(cutout_size[0]//2, cutout_size[1]//2,1)
+                av = query.get_SandFAV ( center[0], center[1] )
+            self.ge = image.GalacticExtinction ( av=av, filter_directory=filter_directory )
             self.cutout_id = cutout_id
 
         self.verbose = verbose 
@@ -129,9 +140,12 @@ class GalexImaging ( Imaging ):
             xmax = int(galex_centralcoord[0] + width/2.)
             cutout.image[key] = im[0].data[ymin:ymax,xmin:xmax]
         return cutout
-    
         
-    def do_ephotometry ( self, central_coordinates, catparams, cat_pixscale=0.168, convert_to_hscfluxes=True):
+    def do_ephotometry ( self, 
+                         central_coordinates, 
+                         catparams, 
+                         cat_pixscale=0.168, 
+                         output_unit='Jy',):
         Y,X = np.mgrid[:self._imshape[0],:self._imshape[1]]
         pix_conversion = self.pixscale / cat_pixscale
         
@@ -148,7 +162,7 @@ class GalexImaging ( Imaging ):
                 continue
                         
             # \\ map sky coordinate to GALEX pixels
-            coord = central_coordinates.reshape(1,2)
+            coord = np.asarray(central_coordinates).reshape(1,2)
             
             cwcs = self.wcs[key]
             galex_pixcoord = cwcs.all_world2pix ( coord, 0 ).flatten()
@@ -156,9 +170,9 @@ class GalexImaging ( Imaging ):
             xoff = X - galex_pixcoord[0]
             
             # \\ define elliptical aperture
-            cyy = catparams.loc[0, 'cyy'] * pix_conversion**2
-            cxx = catparams.loc[0, 'cxx'] * pix_conversion**2
-            cxy = catparams.loc[0, 'cxy'] * pix_conversion**2
+            cyy = catparams['cyy'] * pix_conversion**2
+            cxx = catparams['cxx'] * pix_conversion**2
+            cxy = catparams['cxy'] * pix_conversion**2
             ellipse = cyy*yoff**2 + cxx*xoff**2 + cxy*xoff*yoff  
             
             self.emask = ellipse < 9.
@@ -167,12 +181,17 @@ class GalexImaging ( Imaging ):
             flux_native = np.sum(im[0].data[self.emask] - im[2].data[self.emask])
             e_flux_native = np.sqrt(np.sum(im[1].data[self.emask]))
             
-            if convert_to_hscfluxes:
-                flux = convert_zeropoint(flux_native, self._galex_zpt(key), 27.)
-                e_flux = convert_zeropoint(e_flux_native, self._galex_zpt(key), 27.)
-            else:
+            if output_unit == 'native':
                 flux = flux_native
-                e_flux = e_flux_native
+                e_flux = e_flux_native  
+            else:              
+                if output_unit=='Jy':
+                    zp_out = 8.9
+                elif output_unit == 'hsc':
+                    zp_out = 27.
+                flux = convert_zeropoint(flux_native, self._galex_zpt(key), zp_out)
+                e_flux = convert_zeropoint(e_flux_native, self._galex_zpt(key), zp_out)
+
                 
             # \\ Add in galactic extinction
             if hasattr ( self, 'ge'):
@@ -182,5 +201,5 @@ class GalexImaging ( Imaging ):
             if self.verbose:
                 print(f'[GalexImaging] 10^(0.4*A_{key}) = {factor:.4f}')
             flux_arr[:,ix] = [factor*flux,factor*e_flux]
-            
+        
         return flux_arr

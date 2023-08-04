@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from astropy.io import fits
-#import extinction
+import extinction
 
 
 class BoxImage ( dict ):
@@ -16,7 +16,46 @@ class BoxImage ( dict ):
         return super().__setitem__(__key, __value)
     
     
+        
+class FilterCurve ( object ):
+    def __init__ ( self, name, transmission, filter_type ):
+        self.name = name
+        self.transmission = transmission
+        self.filter_type = filter_type
+
+    @property
+    def lambda_mean ( self ):
+        filt = self.transmission
+        top = np.trapz(filt[:,1]*filt[:,0], filt[:,0])
+        bot = np.trapz(filt[:,1], filt[:,0])
+        return top/bot
+
+    def interpolate_to_wv ( self, wv ):
+        filt = self.transmission
+        fintp = np.interp(wv, filt[:,0], filt[:,1])
+        fintp[(wv<filt[0,0])|(wv>filt[-1,0])] = 0.
+        return fintp
     
+class FilterBase ( object ):
+    def load_filtercurves ( self,
+                            fnames=['FUV','NUV'],#,'g','r','i','z','y'], #'FUV','NUV',
+                            fpaths=['GALEX_GALEX.FUV.dat','GALEX_GALEX.NUV.dat'],
+                            #fpaths=['GALEX.FUV','GALEX.NUV','HSC-g.txt','HSC-r2.txt',
+                            #        'HSC-i2.txt','HSC-z.txt','HSC-Y.txt'], # 'GALEX.FUV','GALEX.NUV',
+                            ftype=None, # 'photon','photon',
+                            #is_global=[True,True,False,False,False,False],
+                            prefix_path='../data/filter_curves/'):
+        filter_d = {}
+        for ix,(name,path) in enumerate(zip(fnames,fpaths)):
+            trans = np.genfromtxt(f'{prefix_path}/{path}')
+            if ftype is None:
+                qf = 'photon'
+            else:
+                qf = ftype[ix]
+            filter_d[name] = FilterCurve ( name, trans, qf )
+        self.filter_curves = filter_d        
+        self.bands = fnames
+
 
 class MultiBandImage (object):
     def __init__ ( self, bands, zpt, pixscale ):
@@ -84,15 +123,22 @@ def cutout_from_fits ( name, source_name, cutout_dir):
     cutout.source_name = source_name
     return cutout
 
-class GalacticExtinction ( ):
-    def __init__(self, extinction_path ):
-        dust_raw = open(extinction_path,'r').readlines()
-        dust = pd.read_csv(extinction_path, skiprows=16, 
-                           delim_whitespace=True, names=[ dr[1:] for dr in dust_raw[13].split() ][1:-1])
-        dust_indices = pd.read_csv(extinction_path.replace('extinction.tbl','dustmap_indexkey.csv'), index_col=0)
-        dust.index = dust_indices.index
-        self.galext = dust
-        self.load_filtercurves()
+class GalacticExtinction ( FilterBase ):
+    def __init__(self, av=None, extinction_path=None, filter_directory='./' ):
+        if (av is not None) and (extinction_path is not None):
+            raise ValueError ("Cannot specify both AV and an extinction table!")
+        elif av is not None:
+            self.av = av
+        else:
+            dust_raw = open(extinction_path,'r').readlines()
+            dust = pd.read_csv(extinction_path, skiprows=16, 
+                            delim_whitespace=True, names=[ dr[1:] for dr in dust_raw[13].split() ][1:-1])
+            dust_indices = pd.read_csv(extinction_path.replace('extinction.tbl','dustmap_indexkey.csv'), index_col=0)
+            dust.index = dust_indices.index
+            self.galext = dust 
+            av = self.galext.loc[str(name), 'AV_SandF'] #XXX
+            self. av = av
+        self.load_filtercurves(prefix_path=filter_directory)
     
     def get_Alambda ( self, Av, filter_name, Rv=3.1 ):
         '''
@@ -117,7 +163,8 @@ class GalacticExtinction ( ):
         return Alambda_eff #keff * Av / Rv
     
     def deredden ( self, name, filter_name, Rv=3.1, verbose=False ):
-        av = self.galext.loc[str(name), 'AV_SandF']
+        av = self.av 
+        
         if verbose:
             print(f'[GalExt] extinction over is A_V={av}')
             
