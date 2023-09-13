@@ -86,7 +86,7 @@ class ColorBase ( object ):
         return hsv_l
         
         
-    def sequential_cmap ( self, end_color='w', end_color_system='mpl_named', reverse=False, fade=1. ):
+    def sequential_cmap ( self, end_color='w', end_color_system='mpl_named', reverse=True, fade=1. ):
         end_color = ColorBase ( end_color, end_color_system )
         if fade<1.:
             end_color = end_color.translucify ( fade )

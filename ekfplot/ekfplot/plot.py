@@ -1,9 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import transforms
 from matplotlib import patches
 from matplotlib import patheffects
 from scipy.integrate import quad
+from scipy import ndimage
 from ekfstats import functions, sampling
+from . import colors as ec
 
 
 def midpoints ( x ):
@@ -28,8 +31,20 @@ def imshow ( im, ax=None, q=0.025, origin='lower', **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
     vmin,vmax = np.nanquantile(im, [q,1.-q])
-    ax.imshow ( im, vmin=vmin, vmax=vmax, origin=origin, **kwargs )
-    return ax
+    imshow_out = ax.imshow ( im, vmin=vmin, vmax=vmax, origin=origin, **kwargs )
+    return imshow_out, ax
+
+def imshow_segmentationmap ( segmap, ax=None, color='w', origin='lower', lw=1, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)    
+    segmap_inflated = ndimage.binary_dilation( segmap, iterations=(lw+1)//2).astype(int)
+    segmap_shrunk = ndimage.binary_erosion(segmap, iterations=(lw+1)//2 ).astype(int)
+    outline = segmap_inflated - segmap_shrunk
+    
+    colorbase = ec.ColorBase ( color )
+    cmap = colorbase.sequential_cmap ( fade=0. )
+    im = ax.imshow ( outline>0, cmap=cmap, origin=origin, **kwargs )
+    return im, ax
 
 def outlined_plot ( x, y,  *args, color='k', lw=4, ax=None, bkgcolor='w', label=None, **kwargs ):
     if ax is None:
@@ -39,7 +54,7 @@ def outlined_plot ( x, y,  *args, color='k', lw=4, ax=None, bkgcolor='w', label=
     ax.plot ( x,y, *args, lw=lw*0.5, color=color, label=label, **kwargs )
     return ax
 
-def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidth=1., **kwargs ):
+def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidth=1., coord_type='relative', **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
     
@@ -48,7 +63,11 @@ def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidt
     if va is None:
         va = 'top' if ry > .5 else 'bottom'
     
-    txt = ax.text ( rx, ry, text, transform=ax.transAxes, ha=ha, va=va, **kwargs )
+    if coord_type == 'relative':
+        txt = ax.text ( rx, ry, text, transform=ax.transAxes, ha=ha, va=va, **kwargs )
+    elif coord_type == 'absolute':
+        txt = ax.text ( rx, ry, text, **kwargs )
+        
     if bordercolor is not None:
         txt.set_path_effects ( [patheffects.withStroke(linewidth=borderwidth, foreground=bordercolor)])
     return ax
@@ -266,7 +285,32 @@ def get_subplot_aspectratio ( ax ):
     subplot_aspect = display_aspect/data_aspect
     return subplot_aspect
     
-def pcolor ( x_edges, y_edges, Z, alpha=1., ax=None, cmap='Greys', **kwargs ):
+def alpha_pcolor ( x_edges, y_edges, Z, alpha=1., ax=None, cmap='Greys', **kwargs ):
+    '''
+    Create a pseudocolor plot with varying alpha transparency based on provided data.
+
+    Parameters:
+        x_edges (array-like): The bin edges for the x-axis.
+        y_edges (array-like): The bin edges for the y-axis.
+        Z (array-like): The data values for each (x, y) bin.
+        alpha (float or array-like, optional): Transparency value or an array of alpha values for each (x, y) bin. Default is 1.0.
+        ax (AxesSubplot, optional): The Axes on which to create the plot. If not provided, a new subplot will be created.
+        cmap (str or colormap, optional): Colormap for coloring the bins. Default is 'Greys'.
+        **kwargs: Additional keyword arguments to pass to the ax.pcolor function.
+
+    Returns:
+        AxesSubplot: The subplot containing the pseudocolor plot.
+
+    This function creates a pseudocolor plot with varying alpha transparency based on the provided data. It can be used to
+    visualize data with two-dimensional binning. The 'x_edges' and 'y_edges' are arrays that define the bin edges along the
+    x and y axes respectively. The 'Z' array contains the data values associated with each (x, y) bin. The 'alpha' parameter
+    specifies the transparency level for the plot. It can be a single value applied to the entire plot or an array-like
+    specifying individual alpha values for each (x, y) bin. The 'ax' parameter allows plotting on a specific subplot. If
+    'ax' is not provided, a new subplot will be created. The 'cmap' parameter sets the colormap for coloring the bins.
+
+    Note: This function utilizes the Matplotlib library for plotting and modifies the provided 'ax' subplot if provided.
+
+    '''    
     if ax is None:
         ax = plt.subplot(111)
     if np.isscalar(alpha):
@@ -289,4 +333,42 @@ def pcolor ( x_edges, y_edges, Z, alpha=1., ax=None, cmap='Greys', **kwargs ):
                 ax.add_patch(rect)
         ax.set_xlim ( x_edges[0], x_edges[-1] )
         ax.set_ylim ( y_edges[0], y_edges[-1] )
+    return ax
+
+def imshow_astro ( img, wcs, ax=None, q=0.025, plot_type='imshow', **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+        
+    x = np.arange(img.shape[1])
+    y = np.arange(img.shape[0])
+    Y,X = np.mgrid[:img.shape[0],:img.shape[1]]   
+    
+    ra, dec = wcs.wcs_pix2world ( X, Y, 0 )
+    
+    vmin,vmax = np.nanquantile(img, [q,1.-q])
+    if plot_type == 'imshow':
+        imout = ax.pcolormesh ( ra, dec, img, vmin=vmin, vmax=vmax, **kwargs )
+    elif plot_type == 'contour':
+        imout = ax.contour ( ra, dec, img, **kwargs )
+    
+    if np.subtract(*ax.get_xlim()) < 0:
+        ax.set_xlim ( ax.get_xlim ()[::-1] )
+        
+    return imout, ax
+
+def rectangle ( xy, width, height, *args, rotation=0, ax=None, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+    
+    center = (xy[0] + width/2, xy[1]+height/2)
+    
+    #Rotate rectangle patch object
+    ts = ax.transData    
+    tr = transforms.Affine2D().rotate_deg_around(center[0],center[1], rotation)
+    # t = ts + tr  < XX the order matters a lot here, it's transform to display then rotate or vice versa
+    t = tr + ts
+         
+      
+    rect1 = patches.Rectangle(xy,width,height,*args,**kwargs,transform=t)
+    ax.add_patch(rect1)
     return ax
