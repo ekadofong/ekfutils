@@ -145,7 +145,31 @@ class GalexImaging ( Imaging ):
                          central_coordinates, 
                          catparams, 
                          cat_pixscale=0.168, 
-                         output_unit='Jy',):
+                         output_unit='Jy',
+                         ellipse_size=9.
+                         ):
+        '''
+        Perform elliptical aperture photometry on GALEX imaging data.
+
+        Parameters:
+            central_coordinates (tuple or list): Central coordinates (RA, Dec) in degrees.
+            catparams (dict): Dictionary containing elliptical aperture parameters such as 'cyy', 'cxx', and 'cxy'.
+            cat_pixscale (float, optional): Pixel scale of the catalog in arcseconds per pixel. Default is 0.168.
+            output_unit (str, optional): Desired output flux unit. Options are 'native', 'Jy', or 'hsc'. Default is 'Jy'.
+            ellipse_size (float, optional): Size of the elliptical aperture in squared units. Default is 9.
+
+        Returns:
+            None
+
+        This function performs elliptical aperture photometry on GALEX imaging data. It calculates the background-subtracted flux
+        and its uncertainty within the specified elliptical aperture for FUV and NUV bands. The central coordinates of the
+        aperture, along with the elliptical aperture parameters, are provided in 'central_coordinates' and 'catparams'
+        respectively. The pixel scale of the catalog can be adjusted with 'cat_pixscale'. The calculated flux is then converted
+        to the desired 'output_unit' flux unit, which can be 'native', 'Jy' (Jansky), or 'hsc' (HSC flux units). The parameter
+        'ellipse_size' defines the size of the elliptical aperture.
+
+        Note: This function modifies attributes of the class instance where it is called.
+        '''        
         Y,X = np.mgrid[:self._imshape[0],:self._imshape[1]]
         pix_conversion = self.pixscale / cat_pixscale
         
@@ -175,7 +199,7 @@ class GalexImaging ( Imaging ):
             cxy = catparams['cxy'] * pix_conversion**2
             ellipse = cyy*yoff**2 + cxx*xoff**2 + cxy*xoff*yoff  
             
-            self.emask = ellipse < 9.
+            self.emask = ellipse < ellipse_size
             
             # \\ background-subtracted intensity map 
             flux_native = np.sum(im[0].data[self.emask] - im[2].data[self.emask])
