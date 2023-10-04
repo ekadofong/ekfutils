@@ -1,4 +1,6 @@
 import sys
+import glob
+import os
 import re
 import bibtexparser
 from pylatexenc.latex2text import LatexNodes2Text
@@ -127,12 +129,29 @@ def format_entry ( entry, tag, etal=True, nauthors=3, ncut=4 ):
       [{fmted_journal}{month} {year}{doi}]'''
     return text
         
-def identify_manuscript_figures ( texfile ):
+def identify_manuscript_figures ( texfile, cut_stems=False ):
     tex = open(texfile,'r').read()
     # \\ remove commented out code
     nocomment = re.sub('(?s)^\\\iffalse\{\}.*?\\\\fi\{\}','\n',tex,flags=(re.MULTILINE))
     nocomment = re.sub('^\%.*', '\n', nocomment, flags=re.MULTILINE )
-    figures = [ x.split('/')[-1] for x in re.findall('(?<=includegraphics).*pdf', nocomment) ]
+    if cut_stems:
+        figures = [ x.split('/')[-1] for x in re.findall('(?<=includegraphics).*pdf', nocomment) ]
+    else:
+        figures = [ x.split('{')[-1] for x in re.findall('(?<=includegraphics).*pdf', nocomment) ]
     return figures
-            
+        
+def flag_unused_figures ( texfile, figdir='', move=False, **kwargs):
+    used_figures = identify_manuscript_figures ( texfile, cut_stems=True )
+    all_figures = glob.glob(f'{figdir}*pdf')
+    unused_figures = set(all_figures) - set(used_figures)
+    if move:
+        if not os.path.exists(f'{figdir}unused_figures/'):
+            os.mkdir (f'{figdir}unused_figures/')    
+        for name in unused_figures:
+            os.rename(f'{figdir}{name}', f'{figdir}unused_figures/{name}')
+    return unused_figures
+    
+extensions = ['tex','sty','bib']
+def make_apj_tarball ( project_directory, texfile ):
+    figures = identify_manuscript_figures(texfile)
     
