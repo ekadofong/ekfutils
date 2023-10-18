@@ -49,3 +49,20 @@ def rough_mdeath ( lifetime, mfid=1., tfid=1e10 ):
     Mfid * (tMS(M)/tMS(Mfid))^-0.4 = M
     '''
     return mfid * (lifetime/tfid)**-0.4
+
+def flux21_to_mhi ( flux, z=0., dlum=None, pixel_area=None):
+    '''
+    21cm flux to HI mass; equation 8.20 & 8.21 from Bruce's book
+    '''
+    if dlum is None:
+        dlum = cosmo.luminosity_distance(z)
+    if pixel_area is None:
+        pixel_area = 1.*u.pix
+        
+    prefactor = 2.343e5 * (1.+z) * u.M_sun
+    dfactor = (dlum/u.Mpc)**2
+    fluxfactor = flux / (u.Jy * u.km/u.s)
+    
+    himass = prefactor * dfactor * fluxfactor
+    hisd = himass / pixel_area
+    return hisd

@@ -1,3 +1,4 @@
+import numpy as np
 import extinction
 
 def gecorrection(wave, Av, Rv=3.1, unit='AA', return_magcorr=False):
@@ -28,3 +29,36 @@ def gecorrection(wave, Av, Rv=3.1, unit='AA', return_magcorr=False):
     else:
         corr = 10.**(0.4*Alambda)
         return corr
+
+def photometric_kcorrection ( gr, redshift ):
+    '''
+    Calculate the K-correction for SDSS r-band based on a given g-r color and redshift.
+
+    This function computes the K-correction using the Chilingarian et al. (2012) Equation 1
+    and Table A3. The K-correction is a correction factor applied to photometric data
+    to account for the shift in observed wavelengths due to redshift.
+
+    Parameters:
+    gr (float): The g-r color of the object.
+    redshift (float): The redshift of the object.
+
+    Returns:
+    float: The calculated K-correction for the SDSS r-band.
+
+    References:
+    Chilingarian, I. V., Melchior, A.-L., & Zolotukhin, I. 2012, AJ, 144, 47
+    '''
+    arr = np.array([[0., 0., 0., 0.,],
+                    [-1.61294, 3.81378, -3.56114, 2.47133],
+                    [9.13285,9.85141,-5.1432,-7.02213],
+                    [-81.8341,-30.3631,38.5052,0.,],
+                    [250.732,-25.0159,0.,0.,],
+                    [-215.377,0.,0.,0.]
+                    ])
+    kcorrection = 0.
+    for y_index in np.arange(4):
+        for z_index in np.arange(5):
+            a_xy = arr[z_index, y_index]
+            val = a_xy * redshift**z_index * gr**y_index
+            kcorrection += val
+    return kcorrection

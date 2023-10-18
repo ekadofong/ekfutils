@@ -5,6 +5,7 @@ from matplotlib import patches
 from matplotlib import patheffects
 from scipy.integrate import quad
 from scipy import ndimage
+from astropy import units as u
 from ekfstats import functions, sampling
 from . import colors as ec
 
@@ -27,12 +28,49 @@ def adjust_font ( ax, fontsize=15 ):
     for item in items:
         item.set_fontsize(fontsize)
     
-def imshow ( im, ax=None, q=0.025, origin='lower', **kwargs ):
+def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., **kwargs ):
     if ax is None:
-        ax = plt.subplot(111)
+        ax = plt.subplot(111)        
     vmin,vmax = np.nanquantile(im, [q,1.-q])
+    if center:
+        vextremum = np.max(np.abs([cval-vmin,vmax-cval]))
+        vmin = cval - vextremum
+        vmax = cval + vextremum
     imshow_out = ax.imshow ( im, vmin=vmin, vmax=vmax, origin=origin, **kwargs )
     return imshow_out, ax
+
+def hist2d ( x, y, bins=None, alpha=0.01, ax=None, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+        
+    if bins is None:
+        nbins = 10
+    elif isinstance(bins, int):
+        nbins = bins
+        
+    if (bins is None) or isinstance(bins, int):        
+        fn = lambda input: np.linspace ( *np.nanquantile(input, [alpha, 1.-alpha]), nbins)
+        bins = [fn(x), fn(y)]
+    
+    im = ax.hist2d ( x,y, bins=bins, **kwargs )
+    return im, ax
+
+def contour ( im, ax=None, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+    X,Y = np.mgrid[:im.shape[0],:im.shape[1]]
+    out = ax.contour ( Y, X, im, **kwargs)
+    return out, ax
+
+def imviz ( im, ax=None,  vtype='imshow', **kwargs):
+    if ax is None:
+        ax = plt.subplot(111)
+        
+    if vtype == 'imshow':
+        out,ax = imshow ( im, ax, **kwargs)  
+    elif vtype == 'contour':
+        out,ax = contour (im, ax, **kwargs )
+    return out,ax
 
 def imshow_segmentationmap ( segmap, ax=None, color='w', origin='lower', lw=1, **kwargs ):
     if ax is None:
@@ -66,7 +104,7 @@ def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidt
     if coord_type == 'relative':
         txt = ax.text ( rx, ry, text, transform=ax.transAxes, ha=ha, va=va, **kwargs )
     elif coord_type == 'absolute':
-        txt = ax.text ( rx, ry, text, **kwargs )
+        txt = ax.text ( rx, ry, text, ha=ha, va=va, **kwargs )
         
     if bordercolor is not None:
         txt.set_path_effects ( [patheffects.withStroke(linewidth=borderwidth, foreground=bordercolor)])
@@ -132,7 +170,7 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
                     xerr = xerr,
                     yerr = yerr,
                     zorder=zorder,
-                    **kwargs
+                    **kwargs,
                     )
         im = ax.scatter ( x, y, c=c, zorder=zorder+1, **scatter_kwargs )
         return ax, im
@@ -335,26 +373,37 @@ def alpha_pcolor ( x_edges, y_edges, Z, alpha=1., ax=None, cmap='Greys', **kwarg
         ax.set_ylim ( y_edges[0], y_edges[-1] )
     return ax
 
-def imshow_astro ( img, wcs, ax=None, q=0.025, plot_type='imshow', **kwargs ):
+def imshow_astro ( img, wcs, ax=None, q=0.025, vtype='imshow', use_projection=False, pixcache=None, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
-        
-    x = np.arange(img.shape[1])
-    y = np.arange(img.shape[0])
-    Y,X = np.mgrid[:img.shape[0],:img.shape[1]]   
     
-    ra, dec = wcs.wcs_pix2world ( X, Y, 0 )
+    if pixcache is None:    
+        x = np.arange(img.shape[1])
+        y = np.arange(img.shape[0])
+        Y,X = np.mgrid[:img.shape[0],:img.shape[1]]   
+        
+        ra, dec = wcs.wcs_pix2world ( X, Y, 0 )
+        pixcache = (ra,dec)
+    else:
+        print('[imshow_astro: Warning] Using cached RA, DEC!')
+        ra, dec = pixcache
+        
     
     vmin,vmax = np.nanquantile(img, [q,1.-q])
-    if plot_type == 'imshow':
-        imout = ax.pcolormesh ( ra, dec, img, vmin=vmin, vmax=vmax, **kwargs )
-    elif plot_type == 'contour':
+    if 'vmin' not in kwargs.keys():
+        kwargs['vmin'] = vmin
+    if 'vmax' not in kwargs.keys():
+        kwargs['vmax'] = vmax
+        
+    if vtype == 'imshow':
+        imout = ax.pcolormesh ( ra, dec, img, **kwargs )
+    elif vtype == 'contour':
         imout = ax.contour ( ra, dec, img, **kwargs )
     
     if np.subtract(*ax.get_xlim()) < 0:
         ax.set_xlim ( ax.get_xlim ()[::-1] )
         
-    return imout, ax
+    return imout, ax, pixcache
 
 def rectangle ( xy, width, height, *args, rotation=0, ax=None, **kwargs ):
     if ax is None:
@@ -372,3 +421,23 @@ def rectangle ( xy, width, height, *args, rotation=0, ax=None, **kwargs ):
     rect1 = patches.Rectangle(xy,width,height,*args,**kwargs,transform=t)
     ax.add_patch(rect1)
     return ax
+
+def add_physbar ( xcenter, y, pixscale, distance, ax=None, bar_physical_length = 10. * u.kpc, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+    bar_lengthsky = ((bar_physical_length/distance).decompose()*u.rad).to(u.arcsec)
+    bar_lengthpix = bar_lengthsky / pixscale # arcsec / pix
+    
+    xbegin = xcenter - bar_lengthpix/2.
+    xend = xcenter + bar_lengthpix/2.
+    ypad = abs(np.subtract(*ax.get_ylim())) * 0.05
+    print(ypad)
+    ax.hlines ( y, xbegin, xend, lw=3, color='k' )
+    ax.text ( 
+        xcenter, 
+        y + ypad, 
+        f'{bar_physical_length.value:i} {bar_physical_length.unit}', 
+        ha='center', 
+        va='bottom', 
+        **kwargs 
+    )    
