@@ -162,7 +162,7 @@ class GalacticExtinction ( FilterBase ):
         #keff = fn(wv, kc, cfilt.transmission[:,1])/fn(wv,np.ones_like(kc),cfilt.transmission[:,1])
         return Alambda_eff #keff * Av / Rv
     
-    def deredden ( self, name, filter_name, Rv=3.1, verbose=False ):
+    def deredden ( self, filter_name, Rv=3.1, verbose=False ):
         av = self.av 
         
         if verbose:
