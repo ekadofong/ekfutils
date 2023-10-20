@@ -1,5 +1,6 @@
 import os
 import glob
+import logging
 import urllib
 from xml.etree import ElementTree as ET
 import numpy as np
@@ -8,6 +9,7 @@ from astropy import wcs
 from astropy import units as u
 from astropy import table
 from astropy.nddata import Cutout2D
+import astroquery
 from astroquery.mast import Observations
 
 def get_SandFAV ( ra, dec, region_size = 2., Rv = 3.1, verbose=False):
@@ -88,7 +90,7 @@ def get_nearbyobs ( ra, dec, radius=None ):
     #topull = dproducts[dproducts['productGroupDescription'] == 'Minimum Recommended Products']
     return dproducts, (fuv_name, nuv_name)
 
-def download_galeximages ( ra, dec, name, savedir=None, **kwargs):
+def download_galeximages ( ra, dec, name, savedir=None, verbose=True, **kwargs):
     """
     Download GALEX observations for a single target.
 
@@ -117,7 +119,7 @@ def download_galeximages ( ra, dec, name, savedir=None, **kwargs):
         os.makedirs(target)
         
     open(f'{target}/keys.txt','w').write(f'''FUV,{names[0]}
-NUV,{names[1]}''')
+NUV,{names[1]}''')    
     manifest = Observations.download_products(topull, download_dir=target, mrp_only=True )
     
     for fname in manifest:
@@ -125,8 +127,8 @@ NUV,{names[1]}''')
         filename = os.path.basename(lpath)
         newname = f'{target}/{filename}'
         os.rename ( lpath, newname )
-    
-    print(os.path.dirname(lpath))
+    if verbose:
+        print(f'Saved to: {os.path.dirname(lpath)}')
     os.removedirs(os.path.dirname(lpath))
     return 0, manifest
 
@@ -217,7 +219,8 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         #slice_a0 = slice ( pixcenter[1]-sh, pixcenter[1]+sh )
         #slice_a1 = slice ( pixcenter[0]-sw, pixcenter[0]+sw )        
                   
-        # \\ Following McQuinn+2015, this is Poisson error on the cts (var = cts) divided
+        # \\ Following McQuinn+2015 [2015ApJS..218...29M], Table 2 
+        # \\ this is Poisson error on the cts (var = cts) divided    
         # \\ by effective exposure time
         cts = intmap[0].data * rrhr[0].data      
         variance = fits.ImageHDU ( cts / rrhr[0].data**2, header=intmap[0].header, name='VARIANCE' )
