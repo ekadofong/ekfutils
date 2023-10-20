@@ -68,7 +68,7 @@ class Imaging ( object ):
         return cutout
     
 class GalexImaging ( Imaging ):
-    def __init__ ( self, cutout_id,
+    def __init__ ( self, #cutout_id,
                   galex_bundle=None, fuv_im=None, nuv_im=None, pixscale=1.5,
                   correct_galacticextinction=True,          
                   av=None,        
@@ -106,7 +106,7 @@ class GalexImaging ( Imaging ):
                 center = self.wcs['NUV'].all_pix2world(cutout_size[0]//2, cutout_size[1]//2,1)
                 av = query.get_SandFAV ( center[0], center[1] )
             self.ge = image.GalacticExtinction ( av=av, filter_directory=filter_directory )
-            self.cutout_id = cutout_id
+            #self.cutout_id = cutout_id
 
         self.verbose = verbose 
         
@@ -146,7 +146,8 @@ class GalexImaging ( Imaging ):
                          catparams, 
                          cat_pixscale=0.168, 
                          output_unit='Jy',
-                         ellipse_size=9.
+                         ellipse_size=9.,
+                         geom_type='sep',
                          ):
         '''
         Perform elliptical aperture photometry on GALEX imaging data.
@@ -194,12 +195,18 @@ class GalexImaging ( Imaging ):
             xoff = X - galex_pixcoord[0]
             
             # \\ define elliptical aperture
-            cyy = catparams['cyy'] * pix_conversion**2
-            cxx = catparams['cxx'] * pix_conversion**2
-            cxy = catparams['cxy'] * pix_conversion**2
-            ellipse = cyy*yoff**2 + cxx*xoff**2 + cxy*xoff*yoff  
+            if geom_type=='sep':
+                cyy = catparams['cyy'] * pix_conversion**2
+                cxx = catparams['cxx'] * pix_conversion**2
+                cxy = catparams['cxy'] * pix_conversion**2
+                ellipse = cyy*yoff**2 + cxx*xoff**2 + cxy*xoff*yoff  
+                self.emask = ellipse < ellipse_size
+            elif geom_type == 'desi':
+                ellone = catparams['SHAPE_E1']
+                elltwo = catparams['SHAPE_E2']
+                raise NotImplementedError
             
-            self.emask = ellipse < ellipse_size
+            
             
             # \\ background-subtracted intensity map 
             flux_native = np.sum(im[0].data[self.emask] - im[2].data[self.emask])
@@ -213,13 +220,15 @@ class GalexImaging ( Imaging ):
                     zp_out = 8.9
                 elif output_unit == 'hsc':
                     zp_out = 27.
+                elif output_unit=='nanomaggy':
+                    zp_out = 22.5
                 flux = convert_zeropoint(flux_native, self._galex_zpt(key), zp_out)
                 e_flux = convert_zeropoint(e_flux_native, self._galex_zpt(key), zp_out)
 
                 
             # \\ Add in galactic extinction
             if hasattr ( self, 'ge'):
-                factor = self.ge.deredden ( self.cutout_id, key )
+                factor = self.ge.deredden ( key )
             else:
                 factor = 1.
             if self.verbose:
