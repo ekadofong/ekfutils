@@ -39,7 +39,7 @@ def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., **kwar
     imshow_out = ax.imshow ( im, vmin=vmin, vmax=vmax, origin=origin, **kwargs )
     return imshow_out, ax
 
-def hist2d ( x, y, bins=None, alpha=0.01, ax=None, **kwargs ):
+def hist2d ( x, y, bins=None, alpha=0.01, ax=None, xscale='linear', yscale='linear', **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
         
@@ -48,11 +48,16 @@ def hist2d ( x, y, bins=None, alpha=0.01, ax=None, **kwargs ):
     elif isinstance(bins, int):
         nbins = bins
         
-    if (bins is None) or isinstance(bins, int):        
-        fn = lambda input: np.linspace ( *np.nanquantile(input, [alpha, 1.-alpha]), nbins)
-        bins = [fn(x), fn(y)]
-    
+
+    if (bins is None) or isinstance(bins, int):   
+        scale_fns = {'linear': lambda input: np.linspace ( *np.quantile(input[np.isfinite(input)], 
+                                                                        [alpha, 1.-alpha]), nbins),
+                    'log':lambda input: np.logspace ( *np.quantile(np.log10(input)[np.isfinite(np.log10(input))], 
+                                                                   [alpha, 1.-alpha]), nbins)}
+        bins = [scale_fns[xscale](x), scale_fns[yscale](y)]
     im = ax.hist2d ( x,y, bins=bins, **kwargs )
+    ax.set_xscale(xscale)
+    ax.set_yscale(yscale)
     return im, ax
 
 def contour ( im, ax=None, **kwargs ):
@@ -253,9 +258,46 @@ def running_quantile ( x,
                        erralpha=0.15, 
                        show_counts=False, 
                        ytext = 0.3,
+                       text_kwargs = None,
                        **kwargs ):
+    '''
+        Compute running quantiles for a set of data points within specified bins.
+
+        This function calculates running quantiles of a dataset `y` as a function of a variable `x`, using user-defined bins. 
+        The computed quantiles are specified by the `alpha` parameter. The results can be plotted on an existing matplotlib 
+        `ax` or a new one is created if `ax` is not provided.
+
+        Parameters:
+        x (array-like): The independent variable.
+        y (array-like): The dependent variable.
+        bins (array-like): Binning specification for `x`.
+        alpha (float, optional): The quantile value to compute (default is 0.16, corresponding to the 16th percentile).
+        ax (matplotlib.axes.Axes, optional): The Axes object to plot the results (default is None, which creates a new subplot).
+        erronqt (bool, optional): If True, error bars on quantiles are plotted (default is False).
+        label (str, optional): Label for the data series (default is None).
+        yerr (array-like, optional): Error values for `y` data (default is None).
+        erralpha (float, optional): Alpha value for the error shading (default is 0.15).
+        show_counts (bool, optional): If True, display counts within each bin (default is False).
+        ytext (float, optional): Vertical position for count labels (default is 0.3).
+        **kwargs: Additional keyword arguments to customize the plot.
+
+        Returns:
+        xmid (array): The midpoints of the bins.
+        ystat (array): Computed quantiles or quantiles with error bars, depending on `erronqt`.
+
+        Example:
+        >>> import matplotlib.pyplot as plt
+        >>> x = [1, 2, 3, 4, 5]
+        >>> y = [5, 6, 4, 8, 3]
+        >>> bins = [1, 2, 3, 4, 5]
+        >>> running_quantile(x, y, bins, alpha=0.2, ax=plt.gca(), erronqt=True, label='Data')
+        >>> plt.show()
+        '''    
     if ax is None:
-        ax = plt.subplot(111)    
+        ax = plt.subplot(111) 
+    if text_kwargs is None:
+        text_kwargs = {'fontsize':plt.rcParams['font.size']*.5}
+           
     qt = [alpha, 0.5, 1.-alpha]
     out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
     if show_counts:
@@ -296,7 +338,22 @@ def running_quantile ( x,
         yspan = np.subtract(*ax.get_ylim()[::-1])
         ymin = ax.get_ylim()[0]
         for idx,xm in enumerate(xmid):
-            ax.text ( xm, ymin + ytext * yspan, counts[idx], ha='center', fontsize=plt.rcParams['font.size']*.5, **kwargs )
+            if len(ystat.shape) == 2:
+                ym = ystat[idx,1]
+            else:
+                ym = ystat[idx,1,2]
+            if ax.get_yscale() == 'log':
+                ym = ym * yspan * (1.+ytext)
+            else:
+                ym = ym + yspan * ytext
+                
+            text ( xm, 
+                    ym,
+                    counts[idx], 
+                    ha='center',                     
+                    coord_type='absolute',
+                    **text_kwargs,                
+                    **kwargs )
     return xmid, ystat
 
 def get_subplot_aspectratio ( ax ):
