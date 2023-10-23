@@ -1,8 +1,11 @@
 from typing import ItemsView
 import numpy as np
 from astropy import wcs
+from astropy import units as u
 from ekfparse import query
 from . import image
+
+_GALEX_FWHM = {'FUV':4.5*u.arcsec, 'NUV':5.6*u.arcsec} # \\ https://asd.gsfc.nasa.gov/archive/galex/Documents/instrument_summary.html
 
 def galex_cts2flux ( cts, band ):
     if band == 'FUV':
@@ -140,6 +143,75 @@ class GalexImaging ( Imaging ):
             xmax = int(galex_centralcoord[0] + width/2.)
             cutout.image[key] = im[0].data[ymin:ymax,xmin:xmax]
         return cutout
+    
+    def do_upperlimitphotometry ( self,
+                                  central_coordinates,
+                                  apersize='psf',
+                                  output_unit='Jy',
+                                ):
+        Y,X = np.mgrid[:self._imshape[0],:self._imshape[1]]
+
+        flux_arr = np.zeros([2,2], dtype=float)
+        bands = ['FUV','NUV']
+        ims = [self.fuv_im, self.nuv_im]
+        
+        for ix,im in enumerate(ims):                    
+            key = bands[ix]
+            #im = ims[ix]
+            
+            if im is None:
+                flux_arr[:,ix] = np.NaN
+                continue
+                        
+            # \\ map sky coordinate to GALEX pixels
+            coord = np.asarray(central_coordinates).reshape(1,2)
+            
+            cwcs = self.wcs[key]
+            galex_pixcoord = cwcs.all_world2pix ( coord, 0 ).flatten()
+            yoff = Y - galex_pixcoord[1]
+            xoff = X - galex_pixcoord[0]
+            R = np.sqrt(xoff**2 + yoff**2)
+            
+            # \\ define aperture
+            if apersize == 'psf':
+                #apersize = _GALEX_FWHM[key]
+                apersize_pixel = _GALEX_FWHM[key].to(u.arcsec).value / self.pixscale 
+            elif hasattr ( apersize, 'unit'):                
+                apersize_pixel = apersize.to(u.arcsec).value * u.arcsec                
+            else:
+                apersize_pixel = apersize
+            
+            self.emask = R < apersize_pixel
+            
+            # \\ background-subtracted intensity map 
+            flux_native = np.sum(im[0].data[self.emask] - im[2].data[self.emask])
+            e_flux_native = np.sqrt(np.sum(im[1].data[self.emask]))
+            
+            if output_unit == 'native':
+                flux = flux_native
+                e_flux = e_flux_native  
+            else:              
+                if output_unit=='Jy':
+                    zp_out = 8.9
+                elif output_unit == 'hsc':
+                    zp_out = 27.
+                elif output_unit=='nanomaggy':
+                    zp_out = 22.5
+                flux = convert_zeropoint(flux_native, self._galex_zpt(key), zp_out)
+                e_flux = convert_zeropoint(e_flux_native, self._galex_zpt(key), zp_out)
+
+                
+            # \\ Add in galactic extinction
+            if hasattr ( self, 'ge'):
+                factor = self.ge.deredden ( key )
+            else:
+                factor = 1.
+            if self.verbose:
+                print(f'[GalexImaging] 10^(0.4*A_{key}) = {factor:.4f}')
+            flux_arr[:,ix] = [factor*flux,factor*e_flux]
+        
+        return flux_arr        
+        
         
     def do_ephotometry ( self, 
                          central_coordinates, 
