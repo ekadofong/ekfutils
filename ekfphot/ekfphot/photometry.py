@@ -87,12 +87,14 @@ class GalexImaging ( Imaging ):
             self.fuv_im = galex_bundle['fd']
             self.nuv_im = galex_bundle['nd']
         
-        self.bands = ['FUV','NUV']
         
-        self.wcs = MultiBandWCS ()        
-        self.wcs['FUV'] = wcs.WCS ( self.fuv_im[0].header )
-        self.wcs['NUV'] = wcs.WCS ( self.nuv_im[0].header )
-        
+        self.bands = []#'FUV','NUV']
+        self.wcs = MultiBandWCS () 
+        for name, key in zip(['FUV','NUV'],['fd','nd']):
+            if galex_bundle[key] is not None:
+                self.bands.append(name)
+                self.wcs[name]= wcs.WCS ( galex_bundle[key][0].header )
+
         # \\ image properties
         self.pixscale = pixscale # arcsec / pixel     
         if self.fuv_im is None:
