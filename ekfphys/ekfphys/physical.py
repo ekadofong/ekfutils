@@ -1,5 +1,8 @@
 import numpy as np
 from scipy import integrate 
+from astropy import units as u
+from astropy import constants as co
+from astropy.modeling.physical_models import BlackBody
 
 def _kroupa_imf ( m ):
     mmin = 0.03
@@ -66,3 +69,75 @@ def flux21_to_mhi ( flux, z=0., dlum=None, pixel_area=None):
     himass = prefactor * dfactor * fluxfactor
     hisd = himass / pixel_area
     return hisd
+
+# from Eker + 2018
+solar_sb = co.sigma_sb.to(u.L_sun/u.K**4/u.R_sun**2).value
+
+coeffs = [[2.028, -0.976],
+          [4.572,-0.102],
+          [5.743,-0.007],
+          [4.329,0.010],
+          [3.967,0.093],
+          [2.865,1.105]]
+breakpts = [0.,0.45,0.72,1.05,2.4,7.,np.inf]
+def mass_luminosity ( mass ):
+    '''
+    Mass-Luminosity from https://ui.adsabs.harvard.edu/abs/2018MNRAS.479.5491E/abstract
+    '''
+    if isinstance(mass, float):
+        mass = np.array(mass)
+
+    luminosity = np.zeros_like(mass)
+    for idx in range(len(coeffs)):
+        mask = (mass>breakpts[idx])&(mass<=breakpts[idx+1])
+        cc = coeffs[idx]
+        luminosity[mask] = cc[0]*np.log10(mass[mask]) + cc[1]
+    return 10.**luminosity
+
+def mass_temperature_radius ( mass ):
+    '''
+    MTR relation from https://ui.adsabs.harvard.edu/abs/2018MNRAS.479.5491E/abstract
+    '''
+    if isinstance(mass, float):
+        mass = np.array(mass)
+
+    luminosity = mass_luminosity(mass)
+    radius = np.zeros_like(mass)
+    temperature = np.zeros_like(mass)
+
+    low_mass = mass < 1.5
+    radius[low_mass] = 0.438 * mass[low_mass]**2 + 0.479*mass[low_mass] + 0.075
+    temperature[low_mass] = (luminosity[low_mass] / (4.*np.pi * radius[low_mass]**2 * solar_sb))**0.25
+
+    temperature[~low_mass] = 10.**(-0.17 * np.log10(mass[~low_mass])**2 + 0.888*np.log10(mass[~low_mass]) + 3.671)
+    radius[~low_mass] = np.sqrt(luminosity[~low_mass]/(4.*np.pi*solar_sb*temperature[~low_mass]**4))
+    
+    return radius*u.R_sun, temperature*u.K, luminosity*u.L_sun
+
+def ionizing_flux ( temperature ):
+    '''
+    Assuming a blackbody spectrum, the rate of ionizing photons emitted by a 
+    star of a given temperature.
+    '''
+    if not hasattr(temperature, 'unit'):
+        temperature = temperature * u.K
+    
+    ionizing_flux = np.zeros(len(temperature), dtype=float)
+    for idx in range(len(temperature)):
+        bb = BlackBody ( temperature[idx] )
+        ionizing_energy = 13.6*u.eV
+        # E = hnu
+        # E = h c / lambda
+        # lambda = hc / E
+        ionizing_wavelength = (co.h * co.c / ionizing_energy ).to(u.AA)
+        ionizing_frequency = (ionizing_energy / co.h).to(u.Hz)
+        max_frequency = (co.c / (10.*u.AA)).to(u.Hz)
+        
+        wv = np.arange(10., ionizing_wavelength.value, 1.) * u.AA
+        nu = np.linspace(ionizing_frequency, max_frequency, 1000) 
+        
+        energy_per_photon = (nu * co.h).to(u.erg) / u.photon
+        ionizing_intensity = np.trapz( bb(nu) / energy_per_photon, nu ) 
+        iflux = ionizing_intensity * np.pi * u.sr # why is it x pi sr instead of 4pi?
+        ionizing_flux[idx] = iflux.to(u.photon/u.s/u.cm**2).value
+    return ionizing_flux * u.photon/u.s/u.cm**2

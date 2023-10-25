@@ -38,13 +38,15 @@ def rejection_sample_fromarray ( x, y, nsamp=10000 ):
     sample = rejection_sample ( x, pdf_x, nsamp )
     return sample
 
-def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=50 ):    
+def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=100, oversample=5 ):    
     '''
     Do rejection sampling for a probability density function
     that is known over a set of points x
     '''
     neg_fn = lambda x: -pdf_x(x)
-    pout = optimize.minimize(neg_fn, x.mean(), bounds=[(x.min(),x.max())] )
+    pout = optimize.minimize(neg_fn, x.mean(), method='nelder-mead', bounds=[(x.min(),x.max())] )
+    if pout.nit == 0:
+        raise ValueError ("Minimization did not complete correctly.")
     max_pdf = pdf_x(pout.x)
     
     sample = np.zeros(nsamp)
@@ -52,7 +54,7 @@ def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=50 ):
     niter = 0 
     while nadded < nsamp:
         #idx_draw = np.random.randint(0, x.size, size=5*nsamp)
-        x_draw = np.random.uniform(x.min(),x.max(),5*nsamp)
+        x_draw = np.random.uniform(x.min(),x.max(),oversample*nsamp)
         pdf_at_draw = pdf_x(x_draw)
         uni_at_draw = np.random.uniform(0.,max_pdf,x_draw.size)
         keep = pdf_at_draw >= uni_at_draw        
@@ -62,6 +64,7 @@ def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=50 ):
         niter += 1
         if niter > maxiter:
             print('Warning! Max iterations reached')
+            sample = sample[:nadded+to_add.size]
             break   
     return sample  
 
