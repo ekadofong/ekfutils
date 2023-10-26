@@ -44,7 +44,10 @@ def rough_stellar_lifetime ( m, mfid=1., tfid=1e10 ):
     and
     tMS(M) propto M^-2.5
     '''
-    return tfid * (m/mfid)**-2.5
+    if not hasattr(tfid, 'unit'):
+        tfid = tfid * u.yr
+        
+    return tfid * (m/mfid)**-2.5 
 
 def rough_mdeath ( lifetime, mfid=1., tfid=1e10 ):
     '''

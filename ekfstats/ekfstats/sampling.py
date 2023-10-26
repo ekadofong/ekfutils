@@ -68,6 +68,20 @@ def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=100, oversample=5 ):
             break   
     return sample  
 
+def sample_from_pdf ( var, prob, nsamp=100 ):
+    if len(var) == 1:
+        return np.random.choice( var, p=prob/prob.sum(), size=nsamp)
+    else:
+        indices = np.arange(var[0].size)#.reshape(var[0].shape)
+        flattened_prob = prob.flatten()
+        flattened_prob /= flattened_prob.sum()
+        pulled_indices = np.random.choice ( indices, p=flattened_prob, size=nsamp )
+        coords = np.zeros ( [len(var), nsamp])
+        for idx in range(len(var)):
+            coords[idx] = var[idx].flatten()[pulled_indices]
+        return coords
+
+
 def get_quantile ( xs, ys, alpha ):
     midpts = 0.5*(xs[1:]+xs[:-1])
     ctrapz = integrate.cumulative_trapezoid(ys,xs)
