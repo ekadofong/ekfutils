@@ -30,13 +30,19 @@ def adjust_font ( ax, fontsize=15 ):
     
 def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., **kwargs ):
     if ax is None:
-        ax = plt.subplot(111)        
+        ax = plt.subplot(111)   
+    if hasattr(im, 'unit'):
+        im = im.value
+                     
     vmin,vmax = np.nanquantile(im, [q,1.-q])
     if center:
         vextremum = np.max(np.abs([cval-vmin,vmax-cval]))
         vmin = cval - vextremum
         vmax = cval + vextremum
+
     imshow_out = ax.imshow ( im, vmin=vmin, vmax=vmax, origin=origin, **kwargs )
+    
+    
     return imshow_out, ax
 
 def hist2d ( x, y, bins=None, alpha=0.01, ax=None, xscale='linear', yscale='linear', **kwargs ):
