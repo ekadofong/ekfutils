@@ -144,3 +144,43 @@ def ionizing_flux ( temperature ):
         iflux = ionizing_intensity * np.pi * u.sr # why is it x pi sr instead of 4pi?
         ionizing_flux[idx] = iflux.to(u.photon/u.s/u.cm**2).value
     return ionizing_flux * u.photon/u.s/u.cm**2
+
+def freefall_time ( density ):
+    if not hasattr(density, 'unit'):
+        raise ValueError("Density units not specified!")
+    tff = np.sqrt ( (3.*np.pi)/(32.*co.G*density) )
+    return tff.to(u.Myr)
+
+def midplane_density (gas_surface_density, gas_velocity_dispersion, phi_p=3.):
+    '''
+    Approximate midplane density from eq. 34 of Krumholz & McKee 2005
+    https://iopscience.iop.org/article/10.1086/431734/pdf
+    '''
+    numerator = np.pi * co.G * phi_p * gas_surface_density**2
+    denominator = 2. * gas_velocity_dispersion**2
+    density = (numerator / denominator).to(u.M_sun/u.pc**3)
+    return density
+
+
+def oort_constants (velocity, radius):
+    '''
+    Oort constants assuming a flat rotation curve
+    '''
+    A = (0.5 * (velocity/radius)).to(u.km / u.s / u.kpc )
+    B = -A
+    return A, B
+
+def epicylic_frequency ( A, B ):
+    Om = A - B
+    kappa_sq = -4 * B * Om
+    return np.sqrt(kappa_sq).to(u.km/u.s/u.kpc)
+
+def toomre_length ( surface_density, epicyclic_freq):
+    num = 4.*np.pi**2 * co.G * surface_density
+    tlength = num/epicyclic_freq**2
+    return tlength.to(u.kpc)
+
+def toomre_mass ( surface_density, epicyclic_freq ):
+    tlength = toomre_length ( surface_density, epicyclic_freq )
+    tmass = np.pi * surface_density * tlength**2 / 4.
+    return tmass.to(u.M_sun)
