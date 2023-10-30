@@ -68,8 +68,18 @@ def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=100, oversample=5 ):
             break   
     return sample  
 
-def sample_from_pdf ( var, prob, nsamp=100 ):
-    if len(var) == 1:
+def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear' ):        
+    if not isinstance(var, list):        
+        if not is_bounds:
+            assert np.std(np.diff(var))/np.mean(np.diff(var)) <  1e-5
+        else:
+            if spacing == 'linear':
+                var = np.linspace(*var, 10000)
+                prob = prob(var) 
+            elif spacing == 'log':
+                var = np.logspace(*var,100000)
+                prob = prob(var) * var * np.log(10.)
+                   
         return np.random.choice( var, p=prob/prob.sum(), size=nsamp)
     else:
         indices = np.arange(var[0].size)#.reshape(var[0].shape)
