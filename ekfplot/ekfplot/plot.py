@@ -353,11 +353,12 @@ def running_quantile ( x,
             else:
                 ym = ym + yspan * ytext
                 
-            text ( xm, 
+            text (  xm, 
                     ym,
                     counts[idx], 
                     ha='center',                     
                     coord_type='absolute',
+                    ax=ax,
                     **text_kwargs,                
                     **kwargs )
     return xmid, ystat
