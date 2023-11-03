@@ -40,7 +40,7 @@ def get_SandFAV ( ra, dec, region_size = 2., Rv = 3.1, verbose=False):
     Av = ebv * Rv
     return Av
 
-def get_nearbyobs ( ra, dec, radius=None ):
+def identify_galexcoadds ( ra, dec, radius=None ):
     """
     Get nearby observations from MAST for a given position.
 
@@ -75,8 +75,7 @@ def get_nearbyobs ( ra, dec, radius=None ):
     else:
         nc = None
         nuv_name = None
-    #return nc,fc
-     
+        
     if fc is None and nc is None:
         return None, None
     elif fc is None:
@@ -86,9 +85,30 @@ def get_nearbyobs ( ra, dec, radius=None ):
     else: 
         choice = table.vstack ([fc,nc])
     
+    return (fuv_name, nuv_name), choice
+
+def get_galexobs ( ra, dec, radius=None ):
+    """
+    Get nearby observations from MAST for a given position.
+
+    Parameters:
+        ra (float): Right ascension of the position.
+        dec (float): Declination of the position.
+        radius (astropy.units.quantity.Quantity, optional): Radius around the position (default is 10 arcseconds).
+
+    Returns:
+        tuple: A tuple containing the table of nearby observations and the names of the FUV and NUV tiles.
+
+    """    
+    if radius is None:
+        radius = 10. * u.arcsec
+     
+    (fuv_name, nuv_name), choice = identify_galexcoadds (ra, dec, radius)
     dproducts = Observations.get_product_list ( choice )   
     #topull = dproducts[dproducts['productGroupDescription'] == 'Minimum Recommended Products']
     return dproducts, (fuv_name, nuv_name)
+
+get_galexobs = get_galexobs # \\ backwards compatibility
 
 def download_galeximages ( ra, dec, name, savedir=None, verbose=True, **kwargs):
     """
@@ -99,7 +119,7 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, **kwargs):
         dec (float): Declination of the target.
         name (str): Name of the target.
         savedir (str, optional): Directory to save the downloaded files (default is None, which saves in '~/Downloads/').
-        **kwargs: Additional keyword arguments to pass to get_nearbyobs().
+        **kwargs: Additional keyword arguments to pass to get_galexobs().
 
     Returns:
         tuple: A tuple containing the exit status (0 if successful, 1 otherwise) and a message.
@@ -109,7 +129,7 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, **kwargs):
         savedir = f'{os.environ["HOME"]}/Downloads/'
     if os.path.exists(f'{savedir}/{name}/'):
         return 0, "Already run"
-    topull, names = get_nearbyobs ( ra, dec, **kwargs )
+    topull, names = get_galexobs ( ra, dec, **kwargs )
     if topull is None:
         print(f'No Galex observations found for {name}')
         return 1, f'No Galex observations found for {name}'
@@ -120,7 +140,7 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, **kwargs):
         
     open(f'{target}/keys.txt','w').write(f'''FUV,{names[0]}
 NUV,{names[1]}''')    
-    manifest = Observations.download_products(topull, download_dir=target, mrp_only=True )
+    manifest = Observations.download_products(topull, download_dir=target, mrp_only=True, cache=False )
     
     for fname in manifest:
         lpath = fname['Local Path']
@@ -133,7 +153,7 @@ NUV,{names[1]}''')
     return 0, manifest
 
 
-def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names=False):
+def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names=False, fits_names=None):
     """
     Load locally saved GALEX cutouts and package as a minimal FITS for a target.
 
@@ -147,8 +167,15 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         dict: A dictionary containing the NUV and FUV cutouts (as fits.HDUList objects) with keys 'nd' and 'fd', respectively.
 
     """
-    keypath = f'{datadir}/{name}/keys.txt'
-    if os.path.exists(keypath):
+    if fits_names is not None:  #  \\ method 1: just give me the FITS       
+        if isinstance(fits_names, dict):
+            fuv_name = fits_names['FUV']
+            nuv_name = fits_names['NUV']
+        elif isinstance(fits_names, tuple) or isinstance(fits_names, list):
+            fuv_name = fits_names[0]
+            nuv_name = fits_names[1]
+    elif os.path.exists(keypath): # \\ method 2: logged mapping
+        keypath = f'{datadir}/{name}/keys.txt'
         keyinfo = open(keypath,'r').read().splitlines()
         fuv_name = keyinfo[0].split(',')[1]
         nuv_name = keyinfo[1].split(',')[1]
@@ -159,10 +186,8 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
             fuv_name = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)
         if 'AIS' in nuv_name:
             parts = nuv_name.split('_')        
-            nuv_name = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)
-    
-            
-    elif infer_names:
+            nuv_name = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)                
+    elif infer_names: # \\ method 3: swing for it from the data structure
         fuv_imap = glob.glob(f'{datadir}/{name}/*fd-int.fits*')
         nuv_imap = glob.glob(f'{datadir}/{name}/*nd-int.fits*')
         
@@ -185,7 +210,7 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         else:
             nuv_name = os.path.basename ( fuv_imap[0] ).split('-')[0]
     else:
-        raise OSError ("No keys.txt and infer_names is disallowed!")
+        raise OSError ("No FITS names supplied, no keys.txt, and infer_names is disallowed!")
     
     # \\ Fetch cutouts
     band_names = ['nd','fd']
