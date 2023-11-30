@@ -86,6 +86,7 @@ breakpts = [0.,0.45,0.72,1.05,2.4,7.,np.inf]
 def mass_luminosity ( mass ):
     '''
     Mass-Luminosity from https://ui.adsabs.harvard.edu/abs/2018MNRAS.479.5491E/abstract
+    Wait this can't be right, there's no AGE.
     '''
     if isinstance(mass, float):
         mass = np.array(mass)
@@ -172,6 +173,19 @@ def freefall_time ( density ):
         raise ValueError("Density units not specified!")
     tff = np.sqrt ( (3.*np.pi)/(32.*co.G*density) )
     return tff.to(u.Myr)
+
+def halo_concentration ( m200c, mstar ):
+    '''
+    c200c-M200c relation from Child+2018 equation 18
+    https://iopscience.iop.org/article/10.3847/1538-4357/aabf95/pdf
+    
+    Coefficients from Table 1, line 1
+    '''
+    A,b,m,c0 = 3.44,430.49,-0.10,3.19
+    
+    hsm = (m200c/mstar)/b
+    concentration = A* ( hsm**m *(1. + hsm)**-m - 1.) + c0
+    return concentration 
 
 def midplane_density (gas_surface_density, gas_velocity_dispersion, phi_p=3.):
     '''
