@@ -122,7 +122,7 @@ def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidt
     return ax
     
 
-def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=None, zorder=9,
+def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=None, 
                xerr=None, yerr=None,
                scatter_kwargs={}, xsigma=1., ysigma=1., **kwargs ):
     '''
@@ -176,14 +176,14 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
                     )
     else:
         kwargs['markersize'] = 0
-        ax.errorbar ( x,
+        eim=ax.errorbar ( x,
                     y,
                     xerr = xerr,
-                    yerr = yerr,
-                    zorder=zorder,
+                    yerr = yerr,                    
                     **kwargs,
                     )
-        im = ax.scatter ( x, y, c=c, zorder=zorder+1, **scatter_kwargs )
+        im = ax.scatter ( x, y, c=c,zorder=eim.lines[0].zorder+0.1, 
+                         **scatter_kwargs )
         return ax, im
     return ax
 
@@ -260,11 +260,14 @@ def running_quantile ( x,
                        ax=None, 
                        erronqt=False, 
                        label=None, 
-                       yerr=None, 
-                       erralpha=0.15, 
+                       yerr=None,
+                       err_format='errorbar', 
+                       std_alpha=0.15, 
+                       err_alpha=0.15,
                        show_counts=False, 
                        ytext = 0.3,
                        text_kwargs = None,
+                       show_std=True,
                        **kwargs ):
     '''
         Compute running quantiles for a set of data points within specified bins.
@@ -282,7 +285,7 @@ def running_quantile ( x,
         erronqt (bool, optional): If True, error bars on quantiles are plotted (default is False).
         label (str, optional): Label for the data series (default is None).
         yerr (array-like, optional): Error values for `y` data (default is None).
-        erralpha (float, optional): Alpha value for the error shading (default is 0.15).
+        std_alpha (float, optional): Alpha value for the error shading (default is 0.15).
         show_counts (bool, optional): If True, display counts within each bin (default is False).
         ytext (float, optional): Vertical position for count labels (default is 0.3).
         **kwargs: Additional keyword arguments to customize the plot.
@@ -312,23 +315,41 @@ def running_quantile ( x,
         xmid, ystat = out
     
     if erronqt:
-        errorbar ( xmid, ystat[:,1,2],
-                xlow = bins[:-1],
-                xhigh = bins[1:], 
-                ylow=ystat[:,1,1],
-                yhigh=ystat[:,1,3],
-                ax=ax,
+        if err_format == 'errorbar':
+            errorbar ( xmid, ystat[:,1,2],
+                    xlow = bins[:-1],
+                    xhigh = bins[1:], 
+                    ylow=ystat[:,1,1],
+                    yhigh=ystat[:,1,3],
+                    ax=ax,
+                    label=label,
+                    **kwargs
+                    ) 
+            
+            ypad = np.zeros( [1+ystat.shape[0],2] )
+            ypad[1:,0] = ystat[:,0,2]
+            ypad[1:,1] = ystat[:,2,2]
+            ypad[0,0] = ypad[1,0]
+            ypad[0,1] = ypad[1,1]
+
+            if show_std:
+                ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=std_alpha,**kwargs )   
+        elif err_format == 'fill_between':            
+            ax.plot (
+                xmid,
+                ystat[:,1,2],   
                 label=label,
+                **kwargs             
+            )
+            ax.fill_between (
+                xmid,
+                ystat[:,1,1],
+                ystat[:,1,3],
+                alpha=err_alpha,
                 **kwargs
-                ) 
-        
-        ypad = np.zeros( [1+ystat.shape[0],2] )
-        ypad[1:,0] = ystat[:,0,2]
-        ypad[1:,1] = ystat[:,2,2]
-        ypad[0,0] = ypad[1,0]
-        ypad[0,1] = ypad[1,1]
-                        
-        ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=erralpha,**kwargs )       
+            )
+        else:
+            raise ValueError (f"err_format:{err_format} not recognized!")
     else:        
         errorbar ( xmid, ystat[:,1],
                 xlow = bins[:-1],
@@ -341,20 +362,33 @@ def running_quantile ( x,
                 )
     
     if show_counts:
-        yspan = np.subtract(*ax.get_ylim()[::-1])
+        
         ymin = ax.get_ylim()[0]
         for idx,xm in enumerate(xmid):
+            
             if len(ystat.shape) == 2:
                 ym = ystat[idx,1]
             else:
                 ym = ystat[idx,1,2]
             if ax.get_yscale() == 'log':
-                ym = ym * yspan * (1.+ytext)
-            else:
-                ym = ym + yspan * ytext
+                # \\ log10(yn) = log10(ym) + log10(dm)
+                # \\ log10(yn) = log10(ym * dm)
+                # \\ yn = ym * dm
+                # \\ yn = ym * ymax/ymin * ytext
+                # \\ yn = ym * (ymax/ymin) * 10**ytext
+                yspan = np.divide(*ax.get_ylim()[::-1])             
+                yplot = ym * yspan ** ytext                     
+            else:     
+                yspan = np.subtract(*ax.get_ylim()[::-1])           
+                yplot = ym + yspan * ytext
                 
+            ymin,ymax = ax.get_ylim()
+            if yplot > ymax:
+                yplot = ymax      
+            if yplot < ymin:
+                yplot = ymin
             text (  xm, 
-                    ym,
+                    yplot,
                     counts[idx], 
                     ha='center',                     
                     coord_type='absolute',
