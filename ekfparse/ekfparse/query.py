@@ -58,6 +58,7 @@ def identify_galexcoadds ( ra, dec, radius=None ):
      
     # \\ get all nearby MAST regions   
     obs_table = Observations.query_region ( f'{ra} {dec}', radius=radius )
+    
     galex_table = obs_table[obs_table['obs_collection'] == "GALEX"]
     fuv = galex_table[galex_table['filters']=='FUV']
     nuv = galex_table[galex_table['filters']=='NUV']
@@ -77,7 +78,7 @@ def identify_galexcoadds ( ra, dec, radius=None ):
         nuv_name = None
         
     if fc is None and nc is None:
-        return None, None
+        return (None, None), None
     elif fc is None:
         choice = nc        
     elif nc is None:
@@ -104,13 +105,15 @@ def get_galexobs ( ra, dec, radius=None ):
         radius = 10. * u.arcsec
      
     (fuv_name, nuv_name), choice = identify_galexcoadds (ra, dec, radius)
+    if choice is None:
+        return None, (None, None)
     dproducts = Observations.get_product_list ( choice )   
     #topull = dproducts[dproducts['productGroupDescription'] == 'Minimum Recommended Products']
     return dproducts, (fuv_name, nuv_name)
 
-get_galexobs = get_galexobs # \\ backwards compatibility
 
-def download_galeximages ( ra, dec, name, savedir=None, verbose=True, **kwargs):
+
+def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=False, **kwargs):
     """
     Download GALEX observations for a single target.
 
@@ -127,14 +130,18 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, **kwargs):
     """    
     if savedir is None:
         savedir = f'{os.environ["HOME"]}/Downloads/'
-    if os.path.exists(f'{savedir}/{name}/'):
-        return 0, "Already run"
+    if subdirs and os.path.exists(f'{savedir}/{name}/'):
+        return 0, "Already run", None
+    
     topull, names = get_galexobs ( ra, dec, **kwargs )
     if topull is None:
         print(f'No Galex observations found for {name}')
-        return 1, f'No Galex observations found for {name}'
+        return 1, f'No Galex observations found for {name}', None
     
-    target = f'{savedir}/{name}/'
+    if subdirs:
+        target = f'{savedir}/{name}/'
+    else:
+        target = f'{savedir}/'
     if not os.path.exists(target):
         os.makedirs(target)
         
@@ -150,10 +157,10 @@ NUV,{names[1]}''')
     if verbose:
         print(f'Saved to: {os.path.dirname(lpath)}')
     os.removedirs(os.path.dirname(lpath))
-    return 0, manifest
+    return 0, manifest, names
 
 
-def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names=False, fits_names=None):
+def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names=False, fits_names=None, subdirs=False, clean=False):
     """
     Load locally saved GALEX cutouts and package as a minimal FITS for a target.
 
@@ -167,6 +174,7 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         dict: A dictionary containing the NUV and FUV cutouts (as fits.HDUList objects) with keys 'nd' and 'fd', respectively.
 
     """
+    keypath = f'{datadir}/{name}/keys.txt'
     if fits_names is not None:  #  \\ method 1: just give me the FITS       
         if isinstance(fits_names, dict):
             fuv_name = fits_names['FUV']
@@ -174,19 +182,10 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         elif isinstance(fits_names, tuple) or isinstance(fits_names, list):
             fuv_name = fits_names[0]
             nuv_name = fits_names[1]
-    elif os.path.exists(keypath): # \\ method 2: logged mapping
-        keypath = f'{datadir}/{name}/keys.txt'
+    elif os.path.exists(keypath): # \\ method 2: logged mapping        
         keyinfo = open(keypath,'r').read().splitlines()
         fuv_name = keyinfo[0].split(',')[1]
-        nuv_name = keyinfo[1].split(',')[1]
-        
-        # \ fix for weird key non-matches with AIS, in particular
-        if 'AIS' in fuv_name:
-            parts = fuv_name.split('_') 
-            fuv_name = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)
-        if 'AIS' in nuv_name:
-            parts = nuv_name.split('_')        
-            nuv_name = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)                
+        nuv_name = keyinfo[1].split(',')[1]               
     elif infer_names: # \\ method 3: swing for it from the data structure
         fuv_imap = glob.glob(f'{datadir}/{name}/*fd-int.fits*')
         nuv_imap = glob.glob(f'{datadir}/{name}/*nd-int.fits*')
@@ -211,10 +210,24 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
             nuv_name = os.path.basename ( fuv_imap[0] ).split('-')[0]
     else:
         raise OSError ("No FITS names supplied, no keys.txt, and infer_names is disallowed!")
-    
+
+    # \ fix for weird key non-matches with AIS, in particular
+    if fuv_name is not None:
+        if 'AIS' in fuv_name:
+            parts = fuv_name.split('_') 
+            fuv_name = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)
+    if nuv_name is not None:
+        if 'AIS' in nuv_name:
+            parts = nuv_name.split('_')        
+            nuv_name = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)  
+           
     # \\ Fetch cutouts
     band_names = ['nd','fd']
     output = {}
+    if subdirs:
+        data_path = f'{datadir}/{name}/'
+    else:
+        data_path = datadir    
     
     for ix,prefix in enumerate([nuv_name, fuv_name]):
         if str(prefix).capitalize() == "None":
@@ -223,9 +236,10 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         if verbose:
             print(f'{name} maps to {prefix}')      
         
-        intmap = fits.open ( f'{datadir}/{name}/{prefix}-{band_names[ix]}-int.fits.gz')
-        rrhr = fits.open ( f'{datadir}/{name}/{prefix}-{band_names[ix]}-rrhr.fits.gz')
-        _skybg = fits.open ( f'{datadir}/{name}/{prefix}-{band_names[ix]}-skybg.fits.gz')
+
+        intmap = fits.open ( f'{data_path}/{prefix}-{band_names[ix]}-int.fits.gz')
+        rrhr = fits.open (   f'{data_path}/{prefix}-{band_names[ix]}-rrhr.fits.gz')
+        _skybg = fits.open ( f'{data_path}/{prefix}-{band_names[ix]}-skybg.fits.gz')
         #skybg[0].name = 'SKYBG'
         skybg = fits.ImageHDU(_skybg[0].data, _skybg[0].header, name='SKYBG')
         
@@ -270,4 +284,20 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         ofit = fits.HDUList ( [ intmap_hdu, variance_hdu, skybg_hdu ] )
         
         output[band_names[ix]] = ofit
+        
+        if clean:
+            for product in ['skybg','flags','int','rrhr']:
+                fname = f'{data_path}/{prefix}-{band_names[ix]}-{product}.fits.gz'
+                if os.path.exists(fname):
+                    os.remove(fname)
+                    if verbose:
+                        print(f'...removed {fname}')                      
+    
+    if clean:    
+        fname = f'{data_path}/{prefix}-xd-mcat.fits.gz'
+        if os.path.exists(fname):
+            os.remove(fname)     
+            if verbose:
+                print(f'...removed {fname}')               
+    
     return output
