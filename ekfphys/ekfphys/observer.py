@@ -29,6 +29,13 @@ def gecorrection(wave, Av, Rv=3.1, unit='AA', return_magcorr=False):
     else:
         corr = 10.**(0.4*Alambda)
         return corr
+    
+def balmerdecrement_to_av ( balmerdecrement, intrinsicratio=2.86, RV=3.1 ):
+    balmerintrinsic=2.86
+    phi = 2.5*np.log10(intrinsicratio/balmerdecrement)
+    dk = np.subtract(*extinction.calzetti00 ( np.array([6563.,4862.]), 1., 1. ) ) 
+    AV = RV*phi/dk
+    return AV    
 
 def photometric_kcorrection ( gr, redshift ):
     '''
