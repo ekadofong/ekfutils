@@ -60,3 +60,16 @@ def logschechter_alog ( logm, phi_ast, logM_ast, alpha ):
     t2 = np.e**(-10.**(logm-logM_ast))
     nd =t0*t1*t2
     return nd
+
+def log_uncertainty ( n, u_n ):
+    # X = log10(n)
+    # v_X = (dX/dn)^2 v_n
+    #     =  (ln10 n)^-2 v_n
+    return abs(u_n/(np.log(10.)*n))
+
+def logratio_uncertainty ( n, u_n, d, u_d ):
+    # X = log10 ( n / d)
+    # v_X = (1/(n/d ln10) 1/d)^2 v_n + ( 1/(n/d ln10) n/d^2 )^2 v_d
+    # v_X = (d/[n ln10])^2 * ( v_n / d^2 + n^2/d^4 v_d )
+    #     = (n ln10)^-2 * ( v_n + n_2/d^2 v_d )
+    return np.sqrt ( (n * np.log(10.))**-2. * ( u_n**2  + n**2/d**2 * u_d**2 ) )
