@@ -539,3 +539,45 @@ def add_physbar ( xcenter, y, pixscale, distance, ax=None, bar_physical_length =
         va='bottom', 
         **kwargs 
     )    
+    
+def histstack ( x, y, ax=None, xbins=10, ybins=10, show_quantile=True, quantile=0.5, quantile_kwargs={}, edgecolor='k', facecolor='lightgrey' ):
+    if ax is None:
+        ax = plt.subplot(111)
+    if show_quantile:
+        if 'color' not in quantile_kwargs.keys():
+            quantile_kwargs['color'] = 'tab:red'
+        if 's' not in quantile_kwargs.keys():
+            quantile_kwargs['s'] = 8.
+    
+        
+    if isinstance(xbins, int):
+        xbins = np.linspace(*np.quantile(x, [0.05,.95]), num=xbins)
+    if isinstance(ybins, int):
+        ybins = np.linspace(*np.quantile(y, [0.05,.95]), num=ybins)        
+    
+    assns = np.digitize ( x, xbins )
+    zidx=0
+    for bin_index in np.arange(1, xbins.size)[::-1]:
+        histout = np.histogram(y[assns==bin_index], bins=ybins)    
+        base = np.median(x[assns==bin_index])
+        ys = .75*histout[0]/histout[0].max() + base        
+        shift = (ys.max()-ys.min())*.4
+        
+        out = ax.step( ys - shift, ybins[1:], color=edgecolor, alpha=0.7, where='pre', lw=.5, zorder=zidx)
+        ax.fill_betweenx( 
+            ybins[1:], 
+            base - shift,
+            ys - shift, 
+            zorder = zidx -0.1,            
+            step='post',
+            color = facecolor,
+        )
+        if show_quantile:
+            ax.scatter ( 
+                base, 
+                np.median(y[assns==bin_index]), 
+                zorder=len(xbins) + 30, 
+                **quantile_kwargs
+            )
+        zidx += 1
+        
