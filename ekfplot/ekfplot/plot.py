@@ -540,7 +540,7 @@ def add_physbar ( xcenter, y, pixscale, distance, ax=None, bar_physical_length =
         **kwargs 
     )    
     
-def histstack ( x, y, ax=None, xbins=10, ybins=10, show_quantile=True, quantile=0.5, quantile_kwargs={}, edgecolor='k', facecolor='lightgrey' ):
+def histstack ( x, y, ax=None, xbins=10, ybins=10, show_quantile=True, quantile=0.5, quantile_kwargs={}, edgecolor='k', facecolor='lightgrey', linewidth=1 ):
     if ax is None:
         ax = plt.subplot(111)
     if show_quantile:
@@ -563,7 +563,7 @@ def histstack ( x, y, ax=None, xbins=10, ybins=10, show_quantile=True, quantile=
         ys = .75*histout[0]/histout[0].max() + base        
         shift = (ys.max()-ys.min())*.4
         
-        out = ax.step( ys - shift, ybins[1:], color=edgecolor, alpha=0.7, where='pre', lw=.5, zorder=zidx)
+        out = ax.step( ys - shift, ybins[1:], color=edgecolor, alpha=0.7, where='pre', zorder=zidx, linewidth=linewidth)
         ax.fill_betweenx( 
             ybins[1:], 
             base - shift,
@@ -580,4 +580,40 @@ def histstack ( x, y, ax=None, xbins=10, ybins=10, show_quantile=True, quantile=
                 **quantile_kwargs
             )
         zidx += 1
+
+def violinplot ( distributions, ax=None, clist=None, labels=None, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+    
+    if clist is None:
+        clist = [ ec.ColorBase('C0') for _ in range(len(distributions)) ]
+    elif isinstance ( clist, str ):
+        basecolor = clist
+        clist = [ ec.ColorBase(basecolor) for _ in range(len(distributions)) ]
+    elif not isinstance(clist[0], ec.ColorBase):
+        clist = [ ec.ColorBase(x) for x in clist ]
         
+    parts = ax.violinplot([x for x in distributions], bw_method=0.35, **kwargs)
+
+        
+    # \\ update violinplot shaded region colors (alpha < 1 by default)
+    for pidx,body in enumerate(parts['bodies']):
+        body.set_facecolor ( clist[pidx].base)
+        #parts['cbars'].set
+        body.set_edgecolor ( clist[pidx].base )
+
+    # \\ update violinplot line colors
+    #parts['cbars'].set_ec ( np.array([cc.base for cc in clist]) )
+    #parts['cmins'].set_ec ( np.array([cc.base for cc in clist]) )
+    #parts['cmaxes'].set_ec ( np.array([cc.base for cc in clist]) )
+    
+    # \\ add 16th->84th quantile 
+    quantiles = np.array([np.quantile(dist,[.16,.84]) for dist in distributions])        
+    ax.vlines ( np.arange(1,len(distributions)+1), quantiles[:,0], quantiles[:,1], colors=[x.modulate(-0.1).base for x in clist], lw=4)
+
+    # \\ set qualitative labels
+    ax.set_xticks (range(1,len(distributions)+1))
+    if labels is not None:
+        ax.set_xticklabels(labels)
+    
+    return parts, ax
