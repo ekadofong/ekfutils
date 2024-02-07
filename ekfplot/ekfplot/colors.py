@@ -101,7 +101,7 @@ class ColorBase ( object ):
         return cmap
     
 def colormap_from_list ( clist, style='continuous' ):
-    if hasattr(clist[0], 'base'):
+    if hasattr(clist[0], 'hex_base'):
         clist = [x.base for x in clist]
         
     if style == 'continuous':
@@ -111,5 +111,7 @@ def colormap_from_list ( clist, style='continuous' ):
         
     return cmap
 
-def colormap_whiteanchor ( colormap, ngrain=100 ):
-    return colormap_from_list( ['w'] + [ colormap(x) for x in np.linspace(0.,1.,ngrain) ] )
+def whiteanchor_colormap ( colormap, ngrain=100, alpha=1. ):
+    anchor = ColorBase('w').translucify(alpha).base
+    
+    return colormap_from_list( [anchor] + [ colormap(x) for x in np.linspace(0.,1.,ngrain) ] )
