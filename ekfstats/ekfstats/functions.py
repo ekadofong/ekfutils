@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.special import erf
 
 def finite_masker ( arr_l, inplace=False ):
     '''
@@ -73,3 +74,24 @@ def logratio_uncertainty ( n, u_n, d, u_d ):
     # v_X = (d/[n ln10])^2 * ( v_n / d^2 + n^2/d^4 v_d )
     #     = (n ln10)^-2 * ( v_n + n_2/d^2 v_d )
     return np.sqrt ( (n * np.log(10.))**-2. * ( u_n**2  + n**2/d**2 * u_d**2 ) )
+
+def log_of_uniform ( xpos, xmax ):
+    '''
+    NOT loguniform; this distribution goes as
+    X ~ 1/(xmax) 10^X ln10
+    and is the distribution in logspace of a uniform distribution, i.e.
+    where X := log10(x)
+    '''
+    return xmax**-1 * 10.**xpos * np.log(10.)
+
+def skewnormal ( t, xi, w, a ):
+    '''
+    skewed normal. 
+    xi = location 
+    w = scale
+    a = skew
+    '''
+    prefactor = np.sqrt(2.*np.pi*w**2)**-1
+    t0 = np.exp(-(t-xi)**2 / (2.*w**2))
+    t1 = 1. + erf( a*(t-xi)/np.sqrt(2.*w**2) )
+    return prefactor * t0 * t1
