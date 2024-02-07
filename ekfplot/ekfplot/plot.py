@@ -187,8 +187,13 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         return ax, im
     return ax
 
-def density_count_scatter ():
-    return
+def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1, **kwargs):
+    if ax is None:
+        ax = plt.subplot(111)
+    scatter_color = cmap(1.)
+    s_im = ax.scatter ( data_x, data_y, zorder=0, color=scatter_color, s=scatter_s )  
+    c_im, ax = density_contour ( data_x, data_y, ax, cmap=cmap, **kwargs )  
+    return (s_im, c_im), ax
 
 def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False, **kwargs):
     """
