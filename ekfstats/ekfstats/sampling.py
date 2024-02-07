@@ -78,8 +78,7 @@ def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear', n
                 prob = prob(var) 
             elif spacing == 'log':
                 var = np.logspace(*var,ngrid)
-                prob = prob(var) * var * np.log(10.)
-                   
+                prob = prob(var) * var * np.log(10.)                   
         return np.random.choice( var, p=prob/prob.sum(), size=nsamp)
     else:
         indices = np.arange(var[0].size)#.reshape(var[0].shape)
