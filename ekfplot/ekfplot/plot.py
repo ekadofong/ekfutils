@@ -187,10 +187,38 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         return ax, im
     return ax
 
+def density_count_scatter ():
+    return
+
 def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False, **kwargs):
-    '''
-    Draw a contour based on density
-    '''
+    """
+    Draw contour lines or filled contours representing the density of data points.
+
+    Parameters:
+    -----------
+    data_x : array_like
+        The x-coordinate values of the data points.
+    data_y : array_like
+        The y-coordinate values of the data points.
+    ax : matplotlib.axes.Axes, optional
+        The axis on which to draw the contour plot. If not provided, a new subplot will be created.
+    npts : int, optional
+        The number of points along each axis for creating the contour plot grid. Default is 100.
+    label : str, optional
+        A label for the contour plot. Default is None.
+    quantiles : array_like, optional
+        An array of quantiles used to compute contour levels. If provided, levels are derived from these quantiles.
+        Default is None.
+    filled : bool, optional
+        If True, filled contours will be drawn; otherwise, only contour lines will be drawn. Default is False.
+    **kwargs : dict, optional
+        Additional keyword arguments passed to `ax.contour` or `ax.contourf`.
+
+    Returns:
+    --------
+    matplotlib.axes.Axes
+        The axis object on which the contour plot is drawn.
+    """
     if ax is None:        
         ax = plt.subplot(111)
     fmask = functions.finite_masker ( [data_x, data_y] )
@@ -236,13 +264,35 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
                 kwargs['color'] = kwargs['cmap'](0.5)
             del kwargs['cmap']
         ax.plot ( 0, 0, label=label, lw=2, **kwargs)
-    return ax
+    return im, ax
     
 
 def density_scatter ( x, y, cmap='Greys', ax=None, rasterize=True, **kwargs ):
-    '''
-    Draw a scatterplot colored by density
-    '''
+    """
+    Draw a scatter plot colored by density.
+
+    Parameters:
+    -----------
+    x : array_like
+        The x-coordinate values of the data points.
+    y : array_like
+        The y-coordinate values of the data points.
+    cmap : str or Colormap, optional
+        The colormap used for coloring the points by density. Default is 'Greys'.
+    ax : matplotlib.axes.Axes, optional
+        The axis on which to draw the scatter plot. If not provided, a new subplot will be created.
+    rasterize : bool, optional
+        If True, rasterize the scatter plot for better performance. Default is True.
+    **kwargs : dict, optional
+        Additional keyword arguments passed to `ax.scatter`.
+
+    Returns:
+    --------
+    matplotlib.axes.Axes
+        The axis object on which the scatter plot is drawn.
+    matplotlib.collections.PathCollection
+        The PathCollection object representing the scatter plot.
+    """
     if ax is None:
         ax = plt.subplot(111)
     fmask = functions.finite_masker ( [x, y] )
@@ -326,14 +376,7 @@ def running_quantile ( x,
                     **kwargs
                     ) 
             
-            ypad = np.zeros( [1+ystat.shape[0],2] )
-            ypad[1:,0] = ystat[:,0,2]
-            ypad[1:,1] = ystat[:,2,2]
-            ypad[0,0] = ypad[1,0]
-            ypad[0,1] = ypad[1,1]
-
-            if show_std:
-                ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=std_alpha,**kwargs )   
+       
         elif err_format == 'fill_between':            
             ax.plot (
                 xmid,
@@ -348,8 +391,27 @@ def running_quantile ( x,
                 alpha=err_alpha,
                 **kwargs
             )
+        elif err_format is None:
+            ax.plot (
+                xmid,
+                ystat[:,1,2],   
+                label=label,
+                **kwargs             
+            )            
         else:
             raise ValueError (f"err_format:{err_format} not recognized!")
+        if show_std:
+            ypad = np.zeros( [1+ystat.shape[0],2] )
+            ypad[1:,0] = ystat[:,0,2]
+            ypad[1:,1] = ystat[:,2,2]
+            ypad[0,0] = ypad[1,0]
+            ypad[0,1] = ypad[1,1] 
+                        
+            if err_format == 'fill_between':
+                for eidx in range(2):
+                    ax.plot ( bins, ypad[:,eidx], **kwargs)
+            else:
+                ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=std_alpha,**kwargs )           
     else:        
         errorbar ( xmid, ystat[:,1],
                 xlow = bins[:-1],
@@ -398,6 +460,19 @@ def running_quantile ( x,
     return xmid, ystat
 
 def get_subplot_aspectratio ( ax ):
+    """
+    Calculates the aspect ratio of a subplot.
+
+    Parameters:
+    - ax (matplotlib.axes.Axes): The subplot to calculate the aspect ratio for.
+
+    Returns:
+    - float: The aspect ratio of the subplot.
+
+    Note:
+    This function computes the aspect ratio of a subplot by considering the size of the subplot within the figure
+    and the aspect ratio of the data contained within it.
+    """    
     figwidth, figheight = ax.get_figure().get_size_inches ()
     ax_bbox = ax.get_position ()
     sp_fracw = ax_bbox.width
@@ -420,7 +495,41 @@ def get_subplot_aspectratio ( ax ):
 
     subplot_aspect = display_aspect/data_aspect
     return subplot_aspect
-    
+ 
+def set_aspect_ratio ( ax, desired_aspect, learning_rate=0.5, tolerance=0.01 ):
+    """
+    Adjusts the aspect ratio of a matplotlib subplot to match the desired aspect ratio.
+
+    Parameters:
+    - ax (matplotlib.axes.Axes): The subplot to adjust.
+    - desired_aspect (float): The desired aspect ratio (width / height).
+    - learning_rate (float, optional): The rate at which the aspect ratio adjusts towards the desired value. Defaults to 0.5.
+    - tolerance (float, optional): The acceptable difference between the realized aspect ratio and the desired aspect ratio. Defaults to 0.01.
+
+    Returns:
+    - matplotlib.axes.Axes: The adjusted subplot.
+
+    Raises:
+    - ValueError: If the aspect ratio adjustment enters a runaway state (aspect_ratio < 0.05 or aspect_ratio > 10).
+
+    Note:
+    This function iteratively adjusts the aspect ratio of a subplot until it matches the desired aspect ratio within the specified tolerance.
+    Look. I don't really get how matplotlib's subplot aspect ratios work. It is
+    arcane to me. Hence, this monstrosity:
+    """
+    aspect_ratio=1.
+    while True:
+        ax.set_aspect ( aspect_ratio, adjustable='box' )
+        realized_ratio = get_subplot_aspectratio(ax)
+        if abs(realized_ratio - desired_aspect) < tolerance:
+            break
+        elif (aspect_ratio < 0.05) or (aspect_ratio>10.):
+            raise ValueError ("Runaway aspect ratio!")
+         
+        aspect_ratio += learning_rate*(desired_aspect - realized_ratio)
+
+    return ax 
+
 def alpha_pcolor ( x_edges, y_edges, Z, alpha=1., ax=None, cmap='Greys', **kwargs ):
     '''
     Create a pseudocolor plot with varying alpha transparency based on provided data.
