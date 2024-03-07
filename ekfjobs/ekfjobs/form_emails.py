@@ -4,7 +4,7 @@ body ='''Dear All,
 
 We will welcome **NAME** (**AFFILIATION**) for colloquium this Thursday at 2:30p (**DATE**). You can find the abstract for **PRONOUN** talk, **TITLE**, below.
 
-**FIRSTNAME** will be in the department **TIMES**; please sign up to meet with the speaker and for colloquium dinner via this (Google Sheet)[**LINK**]
+**FIRSTNAME** will be in the department **TIMES**; please sign up to meet with the speaker and for colloquium dinner via this Google Sheet: **LINK** .
 
 Cheers,
 
@@ -24,7 +24,7 @@ pronoun_obj_d = {'his':'him', 'her':'her', 'their':'them'}
 body_request = '''Hello!
 
 Our colloquium speaker, **NAME**, has indicated that **PRONOUN_SUB** would especially like to meet with you during **PRONOUN_POS** visit this week. 
-Please consider signing up to meet with **PRONOUN_OBJ** during **PRONOUN_POS** department visit via this (Google Sheet)[**LINK**]
+Please consider signing up to meet with **PRONOUN_OBJ** during **PRONOUN_POS** department visit via this Google Sheet: **LINK** .
 
 Cheers,
 

@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 from matplotlib import transforms
 from matplotlib import patches
 from matplotlib import patheffects
@@ -9,6 +10,14 @@ from astropy import units as u
 from ekfstats import functions, sampling
 from . import colors as ec
 
+
+common_labels = {
+    'logmstar':r'$\log_{10}(M_\bigstar/M_\odot)$',
+    'logsfr':r'$\log_{10}\left(\rm SFR/(M_\odot\ {\rm yr}^{-1})\right)$',
+    'specz':r'$z_{\rm spec}',
+    'photz':r'$z_{\rm phot}',
+    'ngal':r'N$_{\rm gal}$',
+}
 
 def midpoints ( x ):
     return 0.5*(x[:-1]+x[1:])
@@ -27,14 +36,37 @@ def adjust_font ( ax, fontsize=15 ):
 
     for item in items:
         item.set_fontsize(fontsize)
+
+def set_framecolor ( color, ax=None, labelcolor=None ):
+    '''
+    Sets subplot color. TODO : only accepts mpl_named_color or hex. Need to catch errors or convert
+    '''
+    if labelcolor is None:
+        labelcolor = color
+    if ax is None:
+        ax = plt.subplot(111)
+        
+    ax.tick_params(color=color, labelcolor=labelcolor)
+    for spine in ax.spines.values():
+        spine.set_edgecolor(color)    
     
-def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., **kwargs ):
+def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., qlow=None, qhigh=None, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)   
     if hasattr(im, 'unit'):
         im = im.value
+        
+    
+    if qlow is None:
+        qlow = q
+    else:
+        print('Ignoring q, using qlow')
+    if qhigh is None:
+        qhigh = 1. - q    
+    else:
+        print('Ignoring q, using qhigh')
                      
-    vmin,vmax = np.nanquantile(im, [q,1.-q])
+    vmin,vmax = np.nanquantile(im, [qlow,qhigh])
     if center:
         vextremum = np.max(np.abs([cval-vmin,vmax-cval]))
         vmin = cval - vextremum
@@ -45,9 +77,45 @@ def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., **kwar
     
     return imshow_out, ax
 
-def hist2d ( x, y, bins=None, alpha=0.01, ax=None, xscale='linear', yscale='linear', **kwargs ):
+def hist2d (
+        x,
+        y,
+        bins=None,
+        alpha=0.01,
+        ax=None,
+        xscale='linear',
+        yscale='linear',
+        show_proj=False,
+        figsize=None,
+        cmap = 'Greys',
+        proj_color=None,
+        proj_kwargs=None,
+        **kwargs
+    ):    
     if ax is None:
-        ax = plt.subplot(111)
+        if show_proj:
+            if figsize is None:
+                figsize=(7,7)
+            fig = plt.figure(figsize=figsize)
+            grid = gridspec.GridSpec( 4,4, fig)
+            ax = fig.add_subplot ( grid[1:,:-1])
+            axarr = [
+                ax,
+                fig.add_subplot(grid[0,:-1]),
+                fig.add_subplot(grid[1:,-1])
+            ]
+            axarr[1].set_xticks([])
+            axarr[2].set_yticks([])
+        else:
+            ax = plt.subplot(111)
+            axarr = [ax]
+    else:
+        if show_proj:
+            assert hasattr(ax, '__len__'), "All axes must be provided in order to show 1D projections."
+            axarr = ax
+            ax = axarr[0]
+        else:
+            axarr = [ax]
         
     if bins is None:
         nbins = 10
@@ -61,10 +129,26 @@ def hist2d ( x, y, bins=None, alpha=0.01, ax=None, xscale='linear', yscale='line
                     'log':lambda input: np.logspace ( *np.quantile(np.log10(input)[np.isfinite(np.log10(input))], 
                                                                    [alpha, 1.-alpha]), nbins)}
         bins = [scale_fns[xscale](x), scale_fns[yscale](y)]
-    im = ax.hist2d ( x,y, bins=bins, **kwargs )
+    im = ax.hist2d ( x,y, bins=bins, cmap=cmap, **kwargs )
     ax.set_xscale(xscale)
     ax.set_yscale(yscale)
-    return im, ax
+    
+    if show_proj:
+        if proj_color is None:            
+            if isinstance(cmap, str):
+                cm = getattr(plt.cm, cmap)
+            else:
+                cm = cmap
+            proj_color = cm ( 0.3 )
+        if proj_kwargs is None:
+            proj_kwargs = {}
+        
+        axarr[1].hist ( x, bins=bins[0], color=proj_color, **proj_kwargs) 
+        axarr[1].set_xlim(ax.get_xlim())
+        axarr[2].hist ( y, bins=bins[1], orientation='horizontal', color=proj_color, **proj_kwargs)
+        axarr[2].set_ylim(ax.get_ylim())
+    
+    return im, axarr
 
 def contour ( im, ax=None, **kwargs ):
     if ax is None:
@@ -95,12 +179,14 @@ def imshow_segmentationmap ( segmap, ax=None, color='w', origin='lower', lw=1, *
     im = ax.imshow ( outline>0, cmap=cmap, origin=origin, **kwargs )
     return im, ax
 
-def outlined_plot ( x, y,  *args, color='k', lw=4, ax=None, bkgcolor='w', label=None, **kwargs ):
+def outlined_plot ( x, y,  *args, color='k', lw=4, ls='-', outline_thickness=None, ax=None, bkgcolor='w', label=None, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)
+    if outline_thickness is None:
+        outline_thickness = lw*2
       
-    ax.plot ( x,y, *args, lw=lw, color=bkgcolor, **kwargs )  
-    ax.plot ( x,y, *args, lw=lw*0.5, color=color, label=label, **kwargs )
+    ax.plot ( x,y, *args, lw=outline_thickness, ls='-', color=bkgcolor, **kwargs )  
+    ax.plot ( x,y, *args, lw=lw, color=color, ls=ls, label=label, **kwargs )
     return ax
 
 def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidth=1., coord_type='relative', **kwargs ):
@@ -187,12 +273,45 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         return ax, im
     return ax
 
-def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1, **kwargs):
+def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1, quantiles=None, **kwargs):
+    """
+    Draw a combination of scatter plot and density contour plot. 
+
+    Parameters:
+    -----------
+    data_x : array_like
+        The x-coordinate values of the data points.
+    data_y : array_like
+        The y-coordinate values of the data points.
+    ax : matplotlib.axes.Axes, optional
+        The axis on which to draw the combined plot. If not provided, a new subplot will be created.
+    cmap : str or Colormap, optional
+        The colormap used for coloring the density contours. Default is 'Greys'.
+    scatter_s : float, optional
+        The size of the points in the scatter plot. Default is 1.
+    quantiles : array_like, optional
+        An array of quantiles used to compute contour levels, where each level encloses the specified 
+        fraction of the distribution. Default is None.
+    **kwargs : dict, optional
+        Additional keyword arguments passed to `density_contour`.
+
+    Returns:
+    --------
+    tuple of matplotlib.collections.PathCollection
+        Tuple containing PathCollection objects representing the scatter plot and density contours.
+    matplotlib.axes.Axes
+        The axis object on which the combined plot is drawn.
+    """    
     if ax is None:
         ax = plt.subplot(111)
-    scatter_color = cmap(1.)
+    if quantiles is None:
+        quantiles = np.linspace(.9, 0., 10 )
+        
+    if isinstance(cmap, str):
+        cmap = getattr(plt.cm, cmap)
+    scatter_color = cmap(0.5)
     s_im = ax.scatter ( data_x, data_y, zorder=0, color=scatter_color, s=scatter_s )  
-    c_im, ax = density_contour ( data_x, data_y, ax, cmap=cmap, **kwargs )  
+    c_im, ax = density_contour ( data_x, data_y, ax, cmap=cmap, quantiles=quantiles, filled=True, **kwargs )  
     return (s_im, c_im), ax
 
 def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False, **kwargs):
@@ -252,7 +371,9 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
         arr = np.diff(levels) > np.finfo(float).resolution
         skip = np.sum(~arr)
         levels = levels[skip:]
+        levels = np.unique(levels) # \\ in case there are points where the quantiles return the same value
         kwargs['levels'] = levels
+        
     
     if filled:
         fn = ax.contourf
@@ -654,7 +775,20 @@ def add_physbar ( xcenter, y, pixscale, distance, ax=None, bar_physical_length =
         **kwargs 
     )    
     
-def histstack ( x, y, ax=None, xbins=10, ybins=10, show_quantile=True, quantile=0.5, quantile_kwargs={}, edgecolor='k', facecolor='lightgrey', linewidth=1 ):
+def histstack ( 
+                x,
+                y, 
+                ax=None, 
+                xbins=10, 
+                ybins=10,
+                show_quantile=True,
+                quantile=0.5,
+                quantile_kwargs={},
+                edgecolor='k',
+                facecolor='lightgrey',
+                linewidth=1, 
+                stretch=1.2 
+                ):
     if ax is None:
         ax = plt.subplot(111)
     if show_quantile:
@@ -674,23 +808,32 @@ def histstack ( x, y, ax=None, xbins=10, ybins=10, show_quantile=True, quantile=
     for bin_index in np.arange(1, xbins.size)[::-1]:
         histout = np.histogram(y[assns==bin_index], bins=ybins)    
         base = np.median(x[assns==bin_index])
-        ys = .75*histout[0]/histout[0].max() + base        
+        xspan = xbins[bin_index] - xbins[bin_index-1]
+        ys = stretch*xspan*histout[0]/histout[0].max() + base        
         shift = (ys.max()-ys.min())*.4
         
-        out = ax.step( ys - shift, ybins[1:], color=edgecolor, alpha=0.7, where='pre', zorder=zidx, linewidth=linewidth)
+        if callable(edgecolor):
+            ec = edgecolor(bin_index)
+        else:
+            ec = edgecolor
+        if callable(facecolor):
+            fc = facecolor(bin_index)
+        else:
+            fc = facecolor
+        out = ax.step( ys - shift, ybins[1:], color=ec, alpha=0.7, where='pre', zorder=zidx, linewidth=linewidth)
         ax.fill_betweenx( 
             ybins[1:], 
             base - shift,
             ys - shift, 
-            zorder = zidx -0.1,            
+            zorder = (zidx - 0.1)/(len(xbins)-1.),
             step='post',
-            color = facecolor,
+            color = fc,
         )
         if show_quantile:
             ax.scatter ( 
                 base, 
                 np.median(y[assns==bin_index]), 
-                zorder=len(xbins) + 30, 
+                zorder=1.1, 
                 **quantile_kwargs
             )
         zidx += 1
