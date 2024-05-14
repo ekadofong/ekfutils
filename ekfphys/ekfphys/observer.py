@@ -1,5 +1,6 @@
 import numpy as np
 import extinction
+from .calc_kcor import calc_kcor
 
 def gecorrection(wave, Av, Rv=3.1, unit='AA', return_magcorr=False):
     """Calculate the Galactic extinction correction for a given wavelength and Av.
@@ -37,10 +38,12 @@ def balmerdecrement_to_av ( balmerdecrement, intrinsicratio=2.86, RV=4.05 ):
     AV = RV*phi/dk
     return AV    
 
-def extinction_correction ( wavelength, av, u_av=None, RV=4.05, curve=None ):
+def extinction_correction ( wavelength, av, u_av=None, RV=4.05, curve=None, return_magcorr=False ):
     if curve is None:
         curve = extinction.calzetti00
-    k0 = curve ( np.array([wavelength]), av, RV )
+    if not hasattr(wavelength, '__len__'):
+        wavelength = np.array([wavelength])
+    k0 = curve ( wavelength, av, RV )
     alambda = av * (k0/RV + 1.) 
     if u_av is not None:
         u_alambda = u_av * ( k0/RV + 1. )
@@ -48,12 +51,15 @@ def extinction_correction ( wavelength, av, u_av=None, RV=4.05, curve=None ):
     else:
         #u_alambda = None
         u_corr = None
-    corr = float(10.**(alambda/2.5))
+    if return_magcorr:
+        return alambda, u_alambda
+    
+    corr = 10.**(alambda/2.5)
     
     return corr, u_corr
     
 
-def photometric_kcorrection ( gr, redshift ):
+def photometric_kcorrection ( color, redshift, correction_band='sdss-r' ):
     '''
     Calculate the K-correction for SDSS r-band based on a given g-r color and redshift.
 
@@ -62,7 +68,7 @@ def photometric_kcorrection ( gr, redshift ):
     to account for the shift in observed wavelengths due to redshift.
 
     Parameters:
-    gr (float): The g-r color of the object.
+    color (float): The g-r color of the object.
     redshift (float): The redshift of the object.
 
     Returns:
@@ -71,17 +77,20 @@ def photometric_kcorrection ( gr, redshift ):
     References:
     Chilingarian, I. V., Melchior, A.-L., & Zolotukhin, I. 2012, AJ, 144, 47
     '''
-    arr = np.array([[0., 0., 0., 0.,],
-                    [-1.61294, 3.81378, -3.56114, 2.47133],
-                    [9.13285,9.85141,-5.1432,-7.02213],
-                    [-81.8341,-30.3631,38.5052,0.,],
-                    [250.732,-25.0159,0.,0.,],
-                    [-215.377,0.,0.,0.]
-                    ])
+    if correction_band=='sdss-r':
+        arr = np.array([[0., 0., 0., 0.,],
+                        [-1.61294, 3.81378, -3.56114, 2.47133],
+                        [9.13285,9.85141,-5.1432,-7.02213],
+                        [-81.8341,-30.3631,38.5052,0.,],
+                        [250.732,-25.0159,0.,0.,],
+                        [-215.377,0.,0.,0.]
+                        ])
+    else:
+        raise ValueError(f"{correction_band} not recognized!")
     kcorrection = 0.
     for y_index in np.arange(4):
         for z_index in np.arange(5):
             a_xy = arr[z_index, y_index]
-            val = a_xy * redshift**z_index * gr**y_index
+            val = a_xy * redshift**z_index * color**y_index
             kcorrection += val
     return kcorrection
