@@ -10,14 +10,37 @@ from astropy import units as u
 from ekfstats import functions, sampling
 from . import colors as ec
 
-
 common_labels = {
     'logmstar':r'$\log_{10}(M_\bigstar/M_\odot)$',
-    'logsfr':r'$\log_{10}\left(\rm SFR/(M_\odot\ {\rm yr}^{-1})\right)$',
-    'specz':r'$z_{\rm spec}',
-    'photz':r'$z_{\rm phot}',
+    'logmhi':r'$\log_{10}(M_{\rm HI}/M_\odot)$',
+    'logsfr':r'$\log_{10}\left(\rm SFR/[M_\odot\ {\rm yr}^{-1}]\right)$',
+    'sfr':r'SFR [$\rm M_\odot\ {\rm yr}^{-1}$]',
+    'specz':r'$z_{\rm spec}$',
+    'photz':r'$z_{\rm phot}$',
     'ngal':r'N$_{\rm gal}$',
+    'fhi':r'$f_{\rm HI}$',
+    'haew':r'$\rm EW_{\rm H\alpha}$ [$\rm \AA$]',
+    'halum':r'$L_{\rm H\alpha}$ [erg s$^{-1}$]',
+    'tdep':r'$t_{\rm dep}$ [Gyr]',
+    'logtdep':r'$\log_{10}(t_{\rm dep}/[\rm Gyr])$',
+    'ssfr':r'sSFR [${\rm yr}^{-1}$]',
+    'reff':r'$\rm R_{eff}$ [kpc]',
+    'logreff':r"$\rm \log_{10}(R_{eff}/[kpc])$",
+    'ra':'RA [deg]',
+    'dec':"Dec [deg]",
+    'burstiness':r'$\log_{10}(\langle {\rm SFR} \rangle_{10}/ \langle {\rm SFR} \rangle_{100})$',
+    'hauv':r'$\mathcal{R}=\log_{10}(L(H\alpha)/L(\rm FUV))$'
 }
+
+common_units={
+    'flux':r'[erg s$^{-1}$ cm$^{-2}$]',
+    'specflux_wave':r'[erg s$^{-1}$ cm$^{-2}$ $\rm \AA^{-1}$]',
+    'specflux_freq':r'[erg s$^{-1}$ cm$^{-2}$ Hz$^{-1}$]',    
+    'luminosity':r'[erg s$^{-1}$]',
+}
+
+def set_formatting ():
+    plt.rcParams['font.size'] = 15
 
 def midpoints ( x ):
     return 0.5*(x[:-1]+x[1:])
@@ -48,7 +71,104 @@ def set_framecolor ( color, ax=None, labelcolor=None ):
         
     ax.tick_params(color=color, labelcolor=labelcolor)
     for spine in ax.spines.values():
-        spine.set_edgecolor(color)    
+        spine.set_edgecolor(color) 
+        
+def hist (
+        x, 
+        ax=None, 
+        bins=20, 
+        binalpha=0.01, 
+        histtype='bar', 
+        gkde_kwargs=None, 
+        density=False, 
+        orientation='vertical', 
+        stretch=1., 
+        alpha=1., 
+        lw=None,
+        label=None,
+        bintype='linear',
+        **kwargs
+    ):
+    if ax is None:
+        ax = plt.subplot(111) 
+    if gkde_kwargs is None:
+        gkde_kwargs = {}
+    
+    x = functions.fmasker(x)#functions.finite_masker(x, inplace=True)[0]
+    if isinstance(bins, int):
+        if bintype == 'linear':
+            bins = np.linspace(*np.nanquantile(x, [binalpha,1.-binalpha]), bins)
+        elif bintype == 'log':
+            bins = np.logspace(*np.nanquantile(np.log10(x), [binalpha,1.-binalpha]), bins)
+    
+    if histtype == 'gkde':
+        gkde = sampling.gaussian_kde ( x, **gkde_kwargs )
+        #midpts = sampling.midpts(bins)
+        yval = gkde(bins)
+        if not density:
+            yval = yval*x.size*np.median(np.diff(bins))*stretch
+
+        if orientation=='vertical':
+            imhist = ax.plot ( bins, yval, **kwargs )
+        elif orientation=='horizontal':
+            imhist = ax.plot ( yval, bins, **kwargs)
+        else:
+            raise ValueError(f"Orientation {orientation} not understood!")
+    else:
+        if (histtype=='bar')&(alpha<1.)&(lw is not None):                
+            #if 'color' not in kwargs.keys():
+            #    color = ec.ColorBase('grey')
+            #elif isinstance(kwargs['color'], ec.ColorBase):                
+            #    color = kwargs['color']
+            #    del kwargs['color']
+            #else:
+            #    color = ec.ColorBase(kwargs['color'])  
+            #    del kwargs['color']  
+            #
+            #facecolor = color.translucify(alpha).base
+            #edgecolor = color.base
+            #
+            #ax.hist (
+            #    x, 
+            #    bins, 
+            #    histtype=histtype, 
+            #    orientation=orientation, 
+            #    density=density,                 
+            #    facecolor=facecolor,
+            #    edgecolor=edgecolor,
+            #    lw=lw,
+            #    **kwargs
+            #) 
+            _,_,im = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, **kwargs) 
+            if ('color' not in kwargs.keys()) and ('edgecolor' not in kwargs.keys()) and ('ec' not in kwargs.keys()):
+                color = im.patches[0].get_facecolor()
+                color = (color[0], color[1], color[2], 1.)
+                kwargs['color'] = color
+                kwargs['label'] = None
+            else:
+                color = ec.ColorBase (kwargs['color']).base
+                
+            imhist = ax.hist (x, bins, histtype='step', orientation=orientation, density=density, lw=lw, **kwargs) 
+            
+            rect = patches.Rectangle(
+                (0.,0.), 
+                0., 
+                0., 
+                facecolor=(color[0],color[1],color[2],alpha), 
+                edgecolor=color,
+                lw=lw,
+                label=label
+            )
+            ax.add_patch(rect)
+            
+        else:
+            lw = 1
+            imhist = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, lw=lw, label=label, **kwargs) 
+    
+    if bintype == 'log':
+        ax.set_xscale('log')
+    return ax, imhist# bins
+        
     
 def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., qlow=None, qhigh=None, **kwargs ):
     if ax is None:
@@ -80,7 +200,7 @@ def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., qlow=N
 def hist2d (
         x,
         y,
-        bins=None,
+        bins=None,        
         alpha=0.01,
         ax=None,
         xscale='linear',
@@ -129,7 +249,7 @@ def hist2d (
                     'log':lambda input: np.logspace ( *np.quantile(np.log10(input)[np.isfinite(np.log10(input))], 
                                                                    [alpha, 1.-alpha]), nbins)}
         bins = [scale_fns[xscale](x), scale_fns[yscale](y)]
-    im = ax.hist2d ( x,y, bins=bins, cmap=cmap, **kwargs )
+    im = ax.hist2d ( x,y, bins=bins, cmap=cmap, **kwargs ) # counts, xbins, ybins
     ax.set_xscale(xscale)
     ax.set_yscale(yscale)
     
@@ -432,6 +552,7 @@ def density_scatter ( x, y, cmap='Greys', ax=None, rasterize=True, **kwargs ):
 def running_quantile ( x, 
                        y, 
                        bins, 
+                       markersize=4,
                        alpha=0.16, 
                        ax=None, 
                        erronqt=False, 
@@ -499,6 +620,7 @@ def running_quantile ( x,
                     yhigh=ystat[:,1,3],
                     ax=ax,
                     label=label,
+                    markersize=markersize,
                     **kwargs
                     ) 
             
@@ -781,30 +903,32 @@ def histstack (
                 ax=None, 
                 xbins=10, 
                 ybins=10,
+                binalpha=0.05,
                 show_quantile=True,
-                quantile=0.5,
+                quantiles=[0.16,0.5,0.84],
                 quantile_kwargs={},
                 edgecolor='k',
                 facecolor='lightgrey',
+                quantilecolor='k',
                 linewidth=1, 
-                stretch=1.2 
+                stretch=1.2,
+                color_by_count=True,
+                label=None,                            
                 ):
     if ax is None:
         ax = plt.subplot(111)
-    if show_quantile:
-        if 'color' not in quantile_kwargs.keys():
-            quantile_kwargs['color'] = 'tab:red'
-        if 's' not in quantile_kwargs.keys():
-            quantile_kwargs['s'] = 8.
-    
-        
+
     if isinstance(xbins, int):
-        xbins = np.linspace(*np.quantile(x, [0.05,.95]), num=xbins)
+        xbins = np.linspace(*np.quantile(functions.fmasker(x), [binalpha, 1.-binalpha]), num=xbins)
     if isinstance(ybins, int):
-        ybins = np.linspace(*np.quantile(y, [0.05,.95]), num=ybins)        
+        ybins = np.linspace(*np.quantile(functions.fmasker(y), [binalpha, 1.-binalpha]), num=ybins)        
     
     assns = np.digitize ( x, xbins )
+    if color_by_count:
+        maxcounts = np.unique(assns, return_counts=True)[1].max()
+            
     zidx=0
+    has_shown_label=False
     for bin_index in np.arange(1, xbins.size)[::-1]:
         histout = np.histogram(y[assns==bin_index], bins=ybins)    
         base = np.median(x[assns==bin_index])
@@ -812,31 +936,83 @@ def histstack (
         ys = stretch*xspan*histout[0]/histout[0].max() + base        
         shift = (ys.max()-ys.min())*.4
         
+        if color_by_count:
+            fc_modulate = 0.1*(1.-(assns==bin_index).sum() / maxcounts)
+            ec_modulate = 0.3*(1.-(assns==bin_index).sum() / maxcounts)
+        else:
+            fc_modulate = 0.
+            ec_modulate = 0.
+        
         if callable(edgecolor):
-            ec = edgecolor(bin_index)
+            cedgecolor = edgecolor(bin_index)
         else:
-            ec = edgecolor
+            cedgecolor = edgecolor
         if callable(facecolor):
-            fc = facecolor(bin_index)
+            cfacecolor = facecolor(bin_index)
         else:
-            fc = facecolor
-        out = ax.step( ys - shift, ybins[1:], color=ec, alpha=0.7, where='pre', zorder=zidx, linewidth=linewidth)
+            cfacecolor = facecolor
+        if callable(quantilecolor):
+            cquantilecolor = quantilecolor(bin_index)
+        else:
+            cquantilecolor = quantilecolor
+
+        cedgecolor = ec.ColorBase(cedgecolor).modulate(ec_modulate)
+        cfacecolor = ec.ColorBase(cfacecolor).modulate(fc_modulate)
+        cquantilecolor = ec.ColorBase(cquantilecolor).modulate(ec_modulate)
+            
+        out = ax.step(
+            ys - shift, 
+            ybins[1:], 
+            color=cedgecolor.base,
+            where='pre', 
+            zorder=zidx/(len(xbins)-1.),
+            linewidth=linewidth
+        )
         ax.fill_betweenx( 
             ybins[1:], 
             base - shift,
             ys - shift, 
             zorder = (zidx - 0.1)/(len(xbins)-1.),
             step='post',
-            color = fc,
+            color = cfacecolor.base,
         )
         if show_quantile:
-            ax.scatter ( 
-                base, 
-                np.median(y[assns==bin_index]), 
-                zorder=1.1, 
-                **quantile_kwargs
-            )
+            assert len(quantiles) == 3
+            
+            
+            def qfunc ( x, *args, **kwargs ):
+                return np.nanquantile ( x, quantiles[1], *args, **kwargs)
+            u_med = sampling.bootstrap_metric (y[assns==bin_index], qfunc )
+            qvs = np.nanquantile(y[assns==bin_index], quantiles)
+            
+            if np.isfinite(qvs).all():
+                if (ec_modulate==1) and (not has_shown_label):
+                    show_label = True
+                else:
+                    show_label = False
+                
+                ax.hlines(
+                    qvs,
+                    base-shift,
+                    np.interp(qvs, ybins[1:], ys-shift),                                
+                    label = show_label and label or None,
+                    color=cquantilecolor.base,
+                    zorder = (zidx - 0.1)/(len(xbins)-1.),
+                    **quantile_kwargs             
+                )
+                if ec_modulate == 1:
+                    has_shown_label = True
+                    
+                ax.fill_between(
+                    [base-shift, np.interp(qvs[1], ybins[1:], ys-shift)],
+                    *u_med,
+                    color=cquantilecolor.base,
+                    zorder=zidx/(len(xbins)-1.),
+                    **quantile_kwargs
+                )
+
         zidx += 1
+    return (xbins,ybins), ax
 
 def violinplot ( distributions, ax=None, clist=None, labels=None, **kwargs ):
     if ax is None:
