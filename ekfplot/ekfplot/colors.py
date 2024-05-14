@@ -38,6 +38,10 @@ class ColorBase ( object ):
                 self.base = color        
         else:
             raise KeyError (f'Color system {system} not understood!')
+        
+    @property
+    def rgba_base ( self ):
+        return self.base
 
     @property
     def hex_base ( self ):
@@ -87,7 +91,8 @@ class ColorBase ( object ):
         
         
     def sequential_cmap ( self, end_color='w', end_color_system='mpl_named', reverse=True, fade=1. ):
-        end_color = ColorBase ( end_color, end_color_system )
+        if not isinstance(end_color, ColorBase):
+            end_color = ColorBase ( end_color, end_color_system )
         if fade<1.:
             end_color = end_color.translucify ( fade )
             
