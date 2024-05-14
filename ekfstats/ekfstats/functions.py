@@ -7,7 +7,7 @@ def finite_masker ( arr_l, inplace=False ):
     are finite-valued
     '''
     if not isinstance(arr_l, list):
-        arr_l = [arr_l]
+        arr_l = list(arr_l)
     mask = np.isfinite(arr_l[0])
     for arr in arr_l[1:]:
         mask &= np.isfinite(arr)
@@ -18,6 +18,13 @@ def finite_masker ( arr_l, inplace=False ):
         return arr_out
     else:
         return mask
+    
+def fmasker ( *args ):
+    '''
+    Convenience wrapper for finite_masker that takes
+    arguments and returns in-place.
+    '''
+    return finite_masker(args, inplace=True)
 
 def wide_kdeBW ( size, alpha=3. ):
     bw = alpha*size**(-1./5.)  
