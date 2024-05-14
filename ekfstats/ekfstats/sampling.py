@@ -68,28 +68,48 @@ def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=100, oversample=5 ):
             break   
     return sample  
 
-def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear', ngrid=10000,):        
+def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear', ngrid=10000,):    
+    """
+    Generate random samples from a probability distribution defined by its PDF.
+
+    Parameters:
+    - var (list or tuple): The variable or range of variables to sample from. If a single variable, 
+      it can be a list or tuple defining the range. If multiple variables, each element should be a 1D array 
+      defining the values for that variable.
+    - prob (ndarray): The probability density function (PDF) evaluated at the values in 'var'. If 'var' is 
+      a single variable, 'prob' should be a 1D array. If 'var' contains multiple variables, 'prob' should be a 
+      2D array where each row corresponds to a flattened version of the PDF for each variable.
+    - nsamp (int): The number of samples to generate (default is 100).
+    - is_bounds (bool): Indicates if 'var' represents bounds for a range (default is False).
+    - spacing (str): The spacing type for generating the variable grid. Either 'linear' or 'log' (default is 'linear').
+    - ngrid (int): The number of grid points to use when generating the variable grid (default is 10000).
+
+    Returns:
+    - ndarray: A 2D array where each row contains a set of samples for each variable.
+    """        
     if not isinstance(var, list):        
         if not is_bounds:
             assert np.std(np.diff(var))/np.mean(np.diff(var)) <  1e-5
-        else:
-            if spacing == 'linear':                
-                var = np.linspace(*var,ngrid)
-                prob = prob(var) 
+        else:            
+            if spacing == 'linear':                          
+                var = np.linspace(*var,ngrid)                
+                prob = prob(var)                 
             elif spacing == 'log':
                 var = np.logspace(*var,ngrid)
-                prob = prob(var) * var * np.log(10.)                   
+                prob = prob(var) * var * np.log(10.)               
         return np.random.choice( var, p=prob/prob.sum(), size=nsamp)
     else:
         indices = np.arange(var[0].size)#.reshape(var[0].shape)
-        flattened_prob = prob.flatten()
-        flattened_prob /= flattened_prob.sum()
+        flattened_prob  = prob.flatten()
+        #flattened_prob /= flattened_prob.sum()
         pulled_indices = np.random.choice ( indices, p=flattened_prob, size=nsamp )
-        coords = np.zeros ( [len(var), nsamp])
+        coords = np.zeros ( [len(var), nsamp] )
         for idx in range(len(var)):
             coords[idx] = var[idx].flatten()[pulled_indices]
         return coords
 
+def iqr ( ys, alpha=0.16 ):
+    return np.subtract(*np.nanquantile(ys, [1.-alpha, alpha]))
 
 def get_quantile ( xs, ys, alpha ):
     midpts = 0.5*(xs[1:]+xs[:-1])
@@ -173,7 +193,42 @@ def dynamic_upsample ( x, p, N=100 ):
         dx_opt = float(pout.x)
         cx[idx] = x_i + dx_opt
     return cx, p(cx)
+
+def bootstrap_metric ( x, metric_fn, npull=1000, err_type='1684' ):
+    if err_type == '1684_combined':
+        efunc = lambda foo: np.subtract(*np.quantile(foo, [0.84, 0.16]))
+    elif err_type == '1684':
+        efunc = lambda foo: np.quantile(foo, [0.16, 0.84])
+    elif err_type == 'std':
+        efunc = lambda foo: np.std(foo)
+    resamp = np.random.choice ( x, size=[npull, x.size] )
+    try:
+        resampled_metric = metric_fn ( resamp, axis=1 )
+    except TypeError:
+        print('Cannot do array math with input metric function; looping:')
+        resampled_metric = np.array([ metric_fn(ix) for ix in resamp ])
     
+    emetric = efunc(resampled_metric)
+    return emetric
+    
+    
+    
+def bootstrap_histcounts(r,bins=10,npull=1000,w=None, **kwargs):    
+    y_arr = np.zeros([npull, len(bins)-1])
+    for idx in range(npull):
+        resample = np.random.choice(np.arange(len(r)),len(r))
+        if w is None:
+            weights = None
+        else:
+            weights = w[resample]
+        y_r,_ = np.histogram(
+            r[resample],
+            bins=bins, 
+            weights=weights,
+            **kwargs
+        ) 
+        y_arr[idx] = y_r
+    return y_arr
     
 def upsample(x,y, npts=3000):
     '''
