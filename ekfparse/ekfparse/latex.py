@@ -155,3 +155,17 @@ extensions = ['tex','sty','bib']
 def make_apj_tarball ( project_directory, texfile ):
     figures = identify_manuscript_figures(texfile)
     
+
+def remove_latex_functions(function_name, latex):
+    pattern = r'\\%s\{([^{}]*?)\}' % function_name
+    
+    def remove_function(match):
+        argument = match.group(1)
+        # Remove any nested function calls
+        while '{' in argument:
+            argument = re.sub(pattern, r'\1', argument)
+        return argument
+    
+    result = re.sub(pattern, remove_function, latex)
+    
+    return result

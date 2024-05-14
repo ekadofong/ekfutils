@@ -113,7 +113,7 @@ def get_galexobs ( ra, dec, radius=None ):
 
 
 
-def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=False, **kwargs):
+def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=True, **kwargs):
     """
     Download GALEX observations for a single target.
 
@@ -153,14 +153,15 @@ NUV,{names[1]}''')
         lpath = fname['Local Path']
         filename = os.path.basename(lpath)
         newname = f'{target}/{filename}'
-        os.rename ( lpath, newname )
+        if os.path.exists(lpath):
+            os.rename ( lpath, newname )
     if verbose:
         print(f'Saved to: {os.path.dirname(lpath)}')
     os.removedirs(os.path.dirname(lpath))
     return 0, manifest, names
 
 
-def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names=False, fits_names=None, subdirs=False, clean=False):
+def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names=False, fits_names=None, subdirs=True, clean=False):
     """
     Load locally saved GALEX cutouts and package as a minimal FITS for a target.
 
