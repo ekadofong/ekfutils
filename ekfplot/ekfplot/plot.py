@@ -10,26 +10,30 @@ from astropy import units as u
 from ekfstats import functions, sampling
 from . import colors as ec
 
+plt.rcParams['font.size'] = 14
+
 common_labels = {
-    'logmstar':r'$\log_{10}(M_\bigstar/M_\odot)$',
-    'logmhi':r'$\log_{10}(M_{\rm HI}/M_\odot)$',
-    'logsfr':r'$\log_{10}\left(\rm SFR/[M_\odot\ {\rm yr}^{-1}]\right)$',
-    'sfr':r'SFR [$\rm M_\odot\ {\rm yr}^{-1}$]',
-    'specz':r'$z_{\rm spec}$',
-    'photz':r'$z_{\rm phot}$',
-    'ngal':r'N$_{\rm gal}$',
-    'fhi':r'$f_{\rm HI}$',
-    'haew':r'$\rm EW_{\rm H\alpha}$ [$\rm \AA$]',
-    'halum':r'$L_{\rm H\alpha}$ [erg s$^{-1}$]',
-    'tdep':r'$t_{\rm dep}$ [Gyr]',
-    'logtdep':r'$\log_{10}(t_{\rm dep}/[\rm Gyr])$',
-    'ssfr':r'sSFR [${\rm yr}^{-1}$]',
-    'reff':r'$\rm R_{eff}$ [kpc]',
-    'logreff':r"$\rm \log_{10}(R_{eff}/[kpc])$",
-    'ra':'RA [deg]',
-    'dec':"Dec [deg]",
+    'logmstar':r'$\log_{10}(M_\bigstar/M_\odot)$',                          # \\ log10 of stellar mass
+    'logmhi':r'$\log_{10}(M_{\rm HI}/M_\odot)$',                            # \\ log10 of HI mass
+    'logsfr':r'$\log_{10}\left(\rm SFR/[M_\odot\ {\rm yr}^{-1}]\right)$',   # \\ log10 of SFR
+    'sfr':r'SFR [$\rm M_\odot\ {\rm yr}^{-1}$]',                            # \\ SFR
+    'specz':r'$z_{\rm spec}$',                                              # \\ spectroscopic redshift
+    'photz':r'$z_{\rm phot}$',                                              # \\ photometric redshift
+    'ngal':r'N$_{\rm gal}$',                                                # \\ number of galaxies
+    'fhi':r'$f_{\rm HI}$',                                                  # \\ HI gas fraction
+    'haew':r'$\rm EW_{\rm H\alpha}$ [$\rm \AA$]',                           # \\ Halpha EW
+    'halum':r'$L({\rm H\alpha})$ [erg s$^{-1}$]',                           # \\ Halpha luminosity
+    'fuvlum':r'$L({\rm FUV})$ [erg s$^{-1}$ Hz$^{-1}]$',                     # \\ FUV spectral luminosity
+    'tdep':r'$t_{\rm dep}$ [Gyr]',                                          # \\ depletion time
+    'logtdep':r'$\log_{10}(t_{\rm dep}/[\rm Gyr])$',                        # \\ log10 of depletion time
+    'ssfr':r'sSFR [${\rm yr}^{-1}$]',                                       # \\ specific SFR
     'burstiness':r'$\log_{10}(\langle {\rm SFR} \rangle_{10}/ \langle {\rm SFR} \rangle_{100})$',
-    'hauv':r'$\mathcal{R}=\log_{10}(L(H\alpha)/L(\rm FUV))$'
+                                                                            # \\ <SFR>_10 / <SFR>_100
+    'hauv':r'$\mathcal{R}=\log_{10}(L(H\alpha)/L(\rm FUV))$',                # \\ L(Ha)/L(FUV)    
+    'reff':r'$\rm R_{eff}$ [kpc]',                                          # \\ effective radius
+    'logreff':r"$\rm \log_{10}(R_{eff}/[kpc])$",                            # \\ log10 of Reff
+    'ra':'RA [deg]',                                                        # \\ RA
+    'dec':"Dec [deg]",                                                      # \\ DEC
 }
 
 common_units={
@@ -38,6 +42,12 @@ common_units={
     'specflux_freq':r'[erg s$^{-1}$ cm$^{-2}$ Hz$^{-1}$]',    
     'luminosity':r'[erg s$^{-1}$]',
 }
+
+def loglog (ax=None):
+    if ax is None:
+        ax = plt.subplot(111)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
 
 def set_formatting ():
     plt.rcParams['font.size'] = 15
