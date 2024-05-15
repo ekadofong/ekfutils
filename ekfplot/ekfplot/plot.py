@@ -172,7 +172,8 @@ def hist (
             ax.add_patch(rect)
             
         else:
-            lw = 1
+            if lw is None:
+                lw = 1
             imhist = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, lw=lw, label=label, **kwargs) 
     
     if bintype == 'log':
