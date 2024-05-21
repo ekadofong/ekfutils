@@ -118,18 +118,25 @@ def mass_temperature_radius ( mass ):
     
     return radius*u.R_sun, temperature*u.K, luminosity*u.L_sun
 
-def ionizing_flux ( temperature ):
+def ionizing_flux ( temperature, ionizing_energy=None ):
+    
     '''
     Assuming a blackbody spectrum, the rate of ionizing photons emitted by a 
     star of a given temperature.
     '''
+    if not hasattr(temperature, '__len__'):
+        temperature = np.array([temperature])
+    elif temperature.size == 1: # account for astropy.Quantity len-1
+        temperature = np.array([temperature.value]) * temperature.unit
     if not hasattr(temperature, 'unit'):
         temperature = temperature * u.K
+    if ionizing_energy is None:
+        ionizing_energy = 13.6*u.eV
     
     ionizing_flux = np.zeros(len(temperature), dtype=float)
     for idx in range(len(temperature)):
         bb = BlackBody ( temperature[idx] )
-        ionizing_energy = 13.6*u.eV
+        
         # E = hnu
         # E = h c / lambda
         # lambda = hc / E
@@ -167,6 +174,16 @@ def stellar_photometry ( temperature, filter_file  ):
         filter_flux = np.trapz ( (bb(wl)*transmission[:,1])[::-1]/freq[::-1], freq[::-1] ) * np.pi * u.sr
         filter_flux /= normalization
     return filter_flux
+
+def stellar_surface_gravity (mass, radius):
+    if not hasattr( mass, 'unit'):
+        mass = mass * u.M_sun
+    if not hasattr( radius, 'unit'):
+        radius = radius * u.R_sun
+    
+    grav = co.G * mass / radius**2
+    logg = np.log10(grav.cgs.value)
+    return logg
 
 def freefall_time ( density ):
     if not hasattr(density, 'unit'):
