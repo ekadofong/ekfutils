@@ -570,6 +570,7 @@ def running_quantile ( x,
                        label=None, 
                        yerr=None,
                        err_format='errorbar', 
+                       std_format='errorbar',
                        std_alpha=0.15, 
                        err_alpha=0.15,
                        show_counts=False, 
@@ -671,17 +672,45 @@ def running_quantile ( x,
                     ax.plot ( bins, ypad[:,eidx], **kwargs)
             else:
                 ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=std_alpha,**kwargs )           
-    else:        
-        errorbar ( xmid, ystat[:,1],
-                xlow = bins[:-1],
-                xhigh = bins[1:], 
-                ylow=ystat[:,0],
-                yhigh=ystat[:,2],
-                ax=ax,
-                label=label,
-                **kwargs
-                )
-    
+    else:
+        if std_format == 'errorbar':  
+            errorbar ( xmid, ystat[:,1],
+                    xlow = bins[:-1],
+                    xhigh = bins[1:], 
+                    ylow=ystat[:,0],
+                    yhigh=ystat[:,2],
+                    ax=ax,
+                    label=label,
+                    **kwargs
+                    )
+        elif std_format == 'fill_between':
+            if 'ecolor' in kwargs.keys():
+                color = kwargs['ecolor']
+            elif 'color' in kwargs.keys():
+                color = kwargs['color']
+            else:
+                color = 'k'
+            color = ec.ColorBase(color)
+            
+            ax.fill_between(
+                xmid,
+                ystat[:,0],
+                ystat[:,2],
+                #alpha=std_alpha,
+                color=color.modulate(1.-std_alpha).base
+            )
+            for statindex in [0,2]:
+                ax.plot(
+                    xmid,
+                    ystat[:,statindex],
+                    lw=3,
+                    color=color.base
+                )  
+                
+            # \\ make legend icon
+            rect = patches.Rectangle((-99,-99), 0, 0, facecolor=color.modulate(1.-std_alpha).base, edgecolor=color.base, lw=3, label=label)
+            ax.add_patch(rect)          
+        
     if show_counts:
         
         ymin = ax.get_ylim()[0]
