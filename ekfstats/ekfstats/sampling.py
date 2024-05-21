@@ -194,13 +194,15 @@ def dynamic_upsample ( x, p, N=100 ):
         cx[idx] = x_i + dx_opt
     return cx, p(cx)
 
-def bootstrap_metric ( x, metric_fn, npull=1000, err_type='1684' ):
+def bootstrap_metric ( x, metric_fn, npull=1000, err_type='1684', quantiles=None ):
     if err_type == '1684_combined':
         efunc = lambda foo: np.subtract(*np.quantile(foo, [0.84, 0.16]))
     elif err_type == '1684':
         efunc = lambda foo: np.quantile(foo, [0.16, 0.84])
     elif err_type == 'std':
         efunc = lambda foo: np.std(foo)
+    elif err_type == 'quantiles':
+        efunc = lambda foo: np.quantile(foo, quantiles)
     resamp = np.random.choice ( x, size=[npull, x.size] )
     try:
         resampled_metric = metric_fn ( resamp, axis=1 )
