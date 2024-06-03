@@ -47,6 +47,12 @@ def LHa_from_EW ( EW, Mr, z=0., balmer_dec=2.86, ew_c=2.5, ):
     ha_lum = prefactor * (EW+ew_c) / wv_ha**2 * 10.**( (Mr - 34.1)/-2.5 ) * ( balmer_dec / 2.86 ) ** 2.36
     return ha_lum
 
+def LNUV2SFR_IP ( lnuv ):
+    '''
+    Following Eq. 3 of Iglesias-Paramo 2006, corrected for Kroupa IMF
+    '''
+    return lnuv/(10.**9.33) * 0.66
+
 def SFR_UV2Ha ( logsfr_uv, conversion='lee09'):
     '''
     Following Lee+09, but use with caution
@@ -336,3 +342,4 @@ def PP04 (n2):
 
     logOHp12 = np.dot(np.vander ( n2, 4 ), cc)
     return logOHp12
+
