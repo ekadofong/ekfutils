@@ -38,3 +38,27 @@ def get_centerval(arr):
     """
     ccoord = get_center(arr)
     return arr[ccoord[0], ccoord[1]]
+
+def rotate_coordinates ( x, y, theta ):
+    '''
+    Rotate by theta [rad] for rotation matrix
+    | cos(theta), -sin(theta) |
+    | sin(theta),  cos(theta) |    
+    '''
+    xr = x*np.cos(theta) - y*np.sin(theta)
+    yr = x*np.sin(theta) + y*np.cos(theta)
+    return xr, yr
+
+def build_xygrid ( shape, x_0=None, y_0=None, theta=0., ellip=0.):
+    if x_0 is None:
+        x_0 = shape[1]//2
+    if y_0 is None:
+        y_0 = shape[1]//2
+    
+    Y,X = np.mgrid[:shape[0],:shape[1]]
+    X_c = (X - x_0)
+    Y_c = (Y - y_0)
+    X_rot, Y_rot = rotate_coordinates( X_c, Y_c, theta )
+    Y_rot /=  1. - ellip
+    R = np.sqrt(X_rot**2 + Y_rot**2) + 0.0001    
+    return R
