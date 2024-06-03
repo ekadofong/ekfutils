@@ -1,16 +1,16 @@
 import numpy as np
 from scipy.special import erf
 
-def finite_masker ( arr_l, inplace=False ):
+def finite_masker ( arr_l, inplace=False, ul=np.inf, ll=-np.inf ):
     '''
     Returns a mask that is True where both input arrays 
     are finite-valued
     '''
     if not isinstance(arr_l, list):
         arr_l = list(arr_l)
-    mask = np.isfinite(arr_l[0])
+    mask = np.isfinite(arr_l[0])&(arr_l[0]<ul)&(arr_l[0]>ll)
     for arr in arr_l[1:]:
-        mask &= np.isfinite(arr)
+        mask &= np.isfinite(arr)&(arr<ul)&(arr>ll)
     if inplace:
         arr_out = []
         for arr in arr_l:

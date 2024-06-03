@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import minimize
-from astropy.modeling.models import Sersic2D
+from astropy.modeling.models import Sersic1D, Sersic2D, Const1D, Const2D
 from astropy.modeling.fitting import LevMarLSQFitter
 import emcee
 
@@ -345,7 +345,39 @@ class FlexFitter ( LFitter ):
         return -0.5 * np.sum(  weights * (dev + eterm)  )
     
 
-                
+def fit_sersic_1d(radius, intensity, init_n=1., init_r_eff=None, init_const=0., fixed_parameters=None):
+    if init_r_eff is None:        
+        #r = np.sqrt ( (x-init_x_0)**2 + (y-init_y_0)**2 )
+        init_r_eff = np.trapz(radius*intensity*2.*np.pi*radius, radius)
+        init_r_eff /=    np.trapz(radius*2.*np.pi*radius, radius)
+        print(init_r_eff)    
+
+    init_amplitude = np.nanmax(intensity)
+    sersic_init = Sersic1D(
+        amplitude=init_amplitude, 
+        r_eff=init_r_eff, 
+        n=init_n, 
+    )
+    const_init = Const1D(
+        amplitude=init_const
+    )
+    sersic_init = sersic_init + const_init
+    
+    if fixed_parameters is not None:
+        for param in fixed_parameters:            
+            setattr(getattr(sersic_init, param), 'fixed', True)
+    
+    sersic_init.bounds.update ({
+        'amplitude_0': (init_amplitude*0.1, np.inf),
+        'r_eff_0': (0, radius.max()),
+        'n_0': (0.1, 10),  # Sersic index typically ranges from 0.1 to 10
+        'amplitude_1': (0., np.inf)
+    })
+    fitter = LevMarLSQFitter()
+
+    fitted_model = fitter(sersic_init, radius, intensity)
+    im = fitted_model(radius)
+    return fitted_model, im              
 
 def fit_sersic_2d(image, init_n=1., init_r_eff=None, init_ellip=0.5, init_theta=0., init_x_0=None, init_y_0=None, fixed_parameters=None):
     y, x = np.mgrid[:image.shape[0], :image.shape[1]]
@@ -479,3 +511,4 @@ def ellipse_from_point ( x,y, ellip=0., theta=0. ):
     
     semimajor = hypot * np.sqrt ( np.cos(phi)**2 + np.sin(phi)**2/(1.-ellip)**2 )
     return semimajor
+
