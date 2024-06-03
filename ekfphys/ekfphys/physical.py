@@ -153,28 +153,6 @@ def ionizing_flux ( temperature, ionizing_energy=None ):
         ionizing_flux[idx] = iflux.to(u.photon/u.s/u.cm**2).value
     return ionizing_flux * u.photon/u.s/u.cm**2
 
-def stellar_photometry ( temperature, filter_file  ):
-    if not hasattr(temperature, 'unit'):
-        temperature = temperature * u.K
-            
-    transmission = np.genfromtxt ( filter_file )
-    wl = transmission[:,0]*u.AA
-    freq = (co.c/wl).to(u.Hz)
-    # nrml = np.trapz ( ytrans / nu_trans, nu_trans )
-    normalization = np.trapz ( transmission[:,1][::-1] / freq[::-1], freq[::-1] )
-    
-    if temperature.ndim > 0:
-        filter_flux = np.zeros(len(temperature), dtype=float) * u.erg/u.s/u.cm**2/u.Hz
-        for idx in range(len(temperature)):
-            bb = BlackBody ( temperature[idx] )
-            in_filter_flux = np.trapz ( (bb(wl)*transmission[:,1])[::-1]/freq[::-1], freq[::-1] ) * np.pi * u.sr
-            filter_flux[idx] = in_filter_flux/normalization
-    else:
-        bb = BlackBody ( temperature )
-        filter_flux = np.trapz ( (bb(wl)*transmission[:,1])[::-1]/freq[::-1], freq[::-1] ) * np.pi * u.sr
-        filter_flux /= normalization
-    return filter_flux
-
 def stellar_surface_gravity (mass, radius):
     if not hasattr( mass, 'unit'):
         mass = mass * u.M_sun

@@ -1,5 +1,9 @@
 import numpy as np
 import extinction
+from astropy import units as u
+from astropy.io import fits
+from astropy import constants as co
+from astropy.modeling.physical_models import BlackBody
 from .calc_kcor import calc_kcor
 
 def gecorrection(wave, Av, Rv=3.1, unit='AA', return_magcorr=False):
@@ -97,3 +101,73 @@ def photometric_kcorrection ( color, redshift, correction_band='sdss-r' ):
             val = a_xy * redshift**z_index * color**y_index
             kcorrection += val
     return kcorrection
+
+def stellar_photometry ( temperature, filter_file  ):
+    if not hasattr(temperature, 'unit'):
+        temperature = temperature * u.K
+            
+    transmission = np.genfromtxt ( filter_file )
+    wl = transmission[:,0]*u.AA
+    freq = (co.c/wl).to(u.Hz)
+    # nrml = np.trapz ( ytrans / nu_trans, nu_trans )
+    normalization = np.trapz ( transmission[:,1][::-1] / freq[::-1], freq[::-1] )
+    
+    if temperature.ndim > 0:
+        filter_flux = np.zeros(len(temperature), dtype=float) * u.erg/u.s/u.cm**2/u.Hz
+        for idx in range(len(temperature)):
+            bb = BlackBody ( temperature[idx] )
+            in_filter_flux = np.trapz ( (bb(wl)*transmission[:,1])[::-1]/freq[::-1], freq[::-1] ) * np.pi * u.sr
+            filter_flux[idx] = in_filter_flux/normalization
+    else:
+        bb = BlackBody ( temperature )
+        filter_flux = np.trapz ( (bb(wl)*transmission[:,1])[::-1]/freq[::-1], freq[::-1] ) * np.pi * u.sr
+        filter_flux /= normalization
+    return filter_flux
+
+def flambda_to_fnu ( wv, flux ):
+    '''
+    nuF_nu = lF_l
+    F_nu = l/nu F_l
+         = l^2/c F_l
+    '''
+    if not hasattr ( wv, 'unit' ) or not hasattr ( flux, 'unit' ):
+        raise TypeError ("Must supply astropy Quantities!")
+    eunit = flux.unit * wv.unit
+    return (wv**2/co.c * flux).to(eunit/u.Hz)
+
+def fnu_to_flambda ( freq, flux ):
+    '''
+    lam F_lam = nu F_nu 
+    F_lam = nu / lam F_nu 
+          = nu^2 / c F_nu
+    '''    
+    if not hasattr ( freq, 'unit' ) or not hasattr ( flux, 'unit' ):
+        raise TypeError ("Must supply astropy Quantities!") 
+    eunit = flux.unit * freq.unit
+    return (freq**2 / co.c * flux).to(eunit/u.AA)
+def photometry_from_spectrum ( wv, flux, wv_filter=None, trans_filter=None, filter_file=None  ):
+    if filter_file is not None:
+        transmission = np.genfromtxt ( filter_file )
+        wv_filter = transmission[:,0]*u.AA
+        trans_filter = transmission[:,1]    
+        
+    freq = (co.c/wv).to(u.Hz)
+    #filter_flux = np.trapz ( (bb(wl)*transmission[:,1])[::-1]/freq[::-1], freq[::-1] )
+    
+    filter_interpolated = np.interp(wv.value, wv_filter.to(wv.unit).value, trans_filter)[::-1] 
+    
+    band_flux = np.trapz ( flux*filter_interpolated/freq[::-1], freq[::-1] )
+    normalization = np.trapz ( filter_interpolated/freq[::-1], freq[::-1] )
+    return band_flux/normalization
+
+
+class SolarReference ():
+    def __init__ ( self, spectrum = None):
+        if spectrum is None:
+            self.spectrum = fits.open('/Users/kadofong/work/projects/literature_ref/solar/sun_composite.fits')[1]
+            
+    def band_luminosity ( self, filter_file ):
+        fnu = flambda_to_fnu(self.spectrum.data['WAVE']*u.AA, self.spectrum.data['FLUX']*u.erg/u.s/u.cm**2/u.AA)        
+        truesun = photometry_from_spectrum(self.spectrum.data['WAVE']*u.AA, fnu, filter_file=filter_file )
+        truesun *= 4.*np.pi*(u.AU).to(u.cm)**2
+        return truesun
