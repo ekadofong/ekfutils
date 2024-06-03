@@ -349,8 +349,7 @@ def fit_sersic_1d(radius, intensity, init_n=1., init_r_eff=None, init_const=0., 
     if init_r_eff is None:        
         #r = np.sqrt ( (x-init_x_0)**2 + (y-init_y_0)**2 )
         init_r_eff = np.trapz(radius*intensity*2.*np.pi*radius, radius)
-        init_r_eff /=    np.trapz(radius*2.*np.pi*radius, radius)
-        print(init_r_eff)    
+        init_r_eff /=    np.trapz(radius*2.*np.pi*radius, radius)   
 
     init_amplitude = np.nanmax(intensity)
     sersic_init = Sersic1D(
@@ -379,7 +378,8 @@ def fit_sersic_1d(radius, intensity, init_n=1., init_r_eff=None, init_const=0., 
     im = fitted_model(radius)
     return fitted_model, im              
 
-def fit_sersic_2d(image, init_n=1., init_r_eff=None, init_ellip=0.5, init_theta=0., init_x_0=None, init_y_0=None, fixed_parameters=None):
+def fit_sersic_2d(image, init_n=1., init_r_eff=None, init_ellip=0.5, init_theta=0., init_x_0=None, init_y_0=None, fixed_parameters=None, nan_replace=0.):
+    image = np.where(np.isnan(image), nan_replace, image)
     y, x = np.mgrid[:image.shape[0], :image.shape[1]]
     
     if init_x_0 is None:
