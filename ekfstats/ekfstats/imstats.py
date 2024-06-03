@@ -107,5 +107,6 @@ def build_ellipsed_segmentationmap ( sep_catalog, cutout_shape ):
     """    
     segmap = np.zeros(cutout_shape, dtype=int)
     for cid in range(len(sep_catalog)):
-        segmap += build_ellipse_from_sep ( sep_catalog[cid], cutout_shape, )
+        isegmap = build_ellipse_from_sep ( sep_catalog[cid], cutout_shape, )
+        segmap[isegmap>0] |= 1 << cid
     return segmap
