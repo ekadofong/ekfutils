@@ -6,6 +6,7 @@ from xml.etree import ElementTree as ET
 import numpy as np
 from astropy.io import fits
 from astropy import wcs
+from astropy import coordinates
 from astropy import units as u
 from astropy import table
 from astropy.nddata import Cutout2D
@@ -39,6 +40,61 @@ def get_SandFAV ( ra, dec, region_size = 2., Rv = 3.1, verbose=False):
     ebv = float(ebv.split()[0]) # \\ formatted as e.g. '0.03  (mag)'
     Av = ebv * Rv
     return Av
+
+
+
+class DustEngine ( object ):
+    def __init__ (self):
+        self.coord_cache = []
+        self.av_cache = []
+
+    def _concat ( self, xl):
+        '''
+        Convenience function since coordinates.concatenate does not handle
+        the len(X) == 1 case gracefully.
+        '''
+        if len(xl) == 0:
+            return np.array([])
+        elif len(xl) == 1:
+            if isinstance(xl[0], coordinates.SkyCoord):
+                return xl[0]
+            else:
+                return np.array(xl)
+        else:
+            if isinstance(xl[0], coordinates.SkyCoord):
+                return coordinates.concatenate(xl)
+            else:
+                return np.concatenate([xl])
+
+    def get_SandFAV ( self, ra, dec, unit='deg', match_radius=None, verbose=0, **kwargs ):
+        if match_radius is None:
+            if 'region_size' in kwargs.keys():
+                match_radius = kwargs['region_size'] * u.deg
+            else:
+                match_radius = 2. * u.deg
+        coord = coordinates.SkyCoord ( ra, dec, unit=unit )
+        
+        if len(self.coord_cache) > 0:
+            cache_separation = coord.separation ( self._concat(self.coord_cache) )
+            close_matches = cache_separation < match_radius
+            no_matches = close_matches.sum() == 0
+        else:
+            no_matches = True
+        if no_matches:
+            if verbose > 0:
+                print('[DustEngine.get_SandFAV] No cached matches, querying IPAC...')
+            av = get_SandFAV ( ra, dec, **kwargs )
+            self.coord_cache.append(coord)
+            self.av_cache.append(av)            
+        else:
+            if verbose > 0:
+                nobs = int(close_matches.sum())
+                print(f'[DustEngine.getSandFAV] Averaging {nobs} GE matches...')
+            av = np.mean(self._concat(self.av_cache)[close_matches])
+
+        return av
+        
+
 
 def identify_galexcoadds ( ra, dec, radius=None ):
     """
