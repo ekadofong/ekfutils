@@ -369,7 +369,7 @@ def fit_sersic_1d(radius, intensity, init_n=1., init_r_eff=None, init_const=0., 
     sersic_init.bounds.update ({
         'amplitude_0': (init_amplitude*0.1, np.inf),
         'r_eff_0': (0, radius.max()),
-        'n_0': (0.1, 10),  # Sersic index typically ranges from 0.1 to 10
+        'n_0': (0.5, 10),  # Sersic index typically ranges from 0.1 to 10
         'amplitude_1': (0., np.inf)
     })
     fitter = LevMarLSQFitter()
