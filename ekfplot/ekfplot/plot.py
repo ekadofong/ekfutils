@@ -615,6 +615,8 @@ def running_quantile ( x,
         ax = plt.subplot(111) 
     if text_kwargs is None:
         text_kwargs = {'fontsize':plt.rcParams['font.size']*.5}
+    if isinstance(bins, int):
+        bins = np.linspace(*np.nanquantile(x, [0.025,0.975]), bins)
            
     qt = [alpha, 0.5, 1.-alpha]
     out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
