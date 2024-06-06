@@ -267,11 +267,11 @@ def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, n
         counts = np.zeros(xmid.shape[0], dtype=int)
     
     for idx in range(1, bins.size):
+        if return_counts:
+            counts[idx-1] = (assns==idx).sum()        
         if erronqt:
             carr = np.zeros([nresamp, len(qt)])
             indices = np.arange(y.size)[assns==idx] 
-            if return_counts:
-                counts[idx-1] = (assns==idx).sum()
             for jdx in range(nresamp):                                                               
                 if yerr is not None:                    
                     pull_indices = np.random.choice ( indices, indices.size, replace=True  )                    
