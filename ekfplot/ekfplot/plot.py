@@ -50,7 +50,8 @@ def convert_label_to_log ( label, single_spaced=False ):
     
     return r'$\log_{10}($ ' + name + '/[' + unit + '] )'
 
-        
+def convert_label_to_pdf ( label ):
+    return f'dN/d{label}'     
 
 def loglog (ax=None):
     if ax is None:
