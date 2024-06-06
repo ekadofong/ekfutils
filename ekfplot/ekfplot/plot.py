@@ -1,3 +1,4 @@
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
@@ -22,8 +23,8 @@ common_labels = {
     'ngal':r'N$_{\rm gal}$',                                                # \\ number of galaxies
     'fhi':r'$f_{\rm HI}$',                                                  # \\ HI gas fraction
     'haew':r'$\rm EW_{\rm H\alpha}$ [$\rm \AA$]',                           # \\ Halpha EW
-    'halum':r'$L({\rm H\alpha})$ [erg s$^{-1}$]',                           # \\ Halpha luminosity
-    'fuvlum':r'$L({\rm FUV})$ [erg s$^{-1}$ Hz$^{-1}]$',                     # \\ FUV spectral luminosity
+    'halum':r'L$({\rm H\alpha})$ [erg s$^{-1}$]',                           # \\ Halpha luminosity
+    'fuvlum':r'L$_\nu({\rm FUV})$ [erg s$^{-1}$ Hz$^{-1}$]',                     # \\ FUV spectral luminosity
     'tdep':r'$t_{\rm dep}$ [Gyr]',                                          # \\ depletion time
     'logtdep':r'$\log_{10}(t_{\rm dep}/[\rm Gyr])$',                        # \\ log10 of depletion time
     'ssfr':r'sSFR [${\rm yr}^{-1}$]',                                       # \\ specific SFR
@@ -42,6 +43,14 @@ common_units={
     'specflux_freq':r'[erg s$^{-1}$ cm$^{-2}$ Hz$^{-1}$]',    
     'luminosity':r'[erg s$^{-1}$]',
 }
+
+def convert_label_to_log ( label, single_spaced=False ):
+    unit = re.findall('(?<=\[).*(?=\])', label)[0]
+    name = re.sub('\[.*\]', '', label)
+    
+    return r'$\log_{10}($ ' + name + '/[' + unit + '] )'
+
+        
 
 def loglog (ax=None):
     if ax is None:
@@ -621,7 +630,7 @@ def running_quantile ( x,
     qt = [alpha, 0.5, 1.-alpha]
     out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
     if show_counts:
-        xmid, ystat, counts = out
+        xmid, ystat, counts = out        
     else:
         xmid, ystat = out
     
@@ -736,13 +745,14 @@ def running_quantile ( x,
                 
             ymin,ymax = ax.get_ylim()
             if yplot > ymax:
-                yplot = ymax      
+                yplot = ymax - yspan*.025 
             if yplot < ymin:
-                yplot = ymin
+                yplot = ymin + yspan*0.05
             text (  xm, 
                     yplot,
                     counts[idx], 
-                    ha='center',                     
+                    ha='center',
+                    va='top',                     
                     coord_type='absolute',
                     ax=ax,
                     **text_kwargs,                
