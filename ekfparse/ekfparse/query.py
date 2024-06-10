@@ -1,3 +1,4 @@
+import time
 import os
 import glob
 import logging
@@ -114,7 +115,7 @@ class DustEngine ( object ):
         
 
 
-def identify_galexcoadds ( ra, dec, radius=None ):
+def identify_galexcoadds ( ra, dec, radius=None, verbose=True ):
     """
     Get nearby observations from MAST for a given position.
 
@@ -129,11 +130,24 @@ def identify_galexcoadds ( ra, dec, radius=None ):
     """    
     if radius is None:
         radius = 10. * u.arcsec
-     
-    # \\ get all nearby MAST regions   
-    obs_table = Observations.query_region ( f'{ra} {dec}', radius=radius )
+    start = time.time ()
+    # \\ get all nearby MAST regions  
+    obs_table = Observations.query_region ( f'{ra} {dec}', radius=radius )    
+    if verbose:
+        print(f'Queried GALEX observations in {time.time() - start:.2f} seconds.')
+        start = time.time ()        
     
     galex_table = obs_table[obs_table['obs_collection'] == "GALEX"]
+    
+    # \\ only include COADDS that are within 1 GALEX FOV of queried coordinates,
+    # \\ since the coadds are 0 padded outside the circular field of view.
+    galex_fov = 0.6 * u.deg # \\ FOV radius, in degrees. Actual is about 0.625? But coadd seems a little smaller
+    coadd_centers = coordinates.SkyCoord ( galex_table['s_ra'], galex_table['s_dec'], unit='deg' )
+    target = coordinates.SkyCoord ( ra, dec, unit='deg')
+    center2target_separation = target.separation(coadd_centers)
+    is_within_coadd = center2target_separation < galex_fov
+    galex_table = galex_table[is_within_coadd]
+    
     fuv = galex_table[galex_table['filters']=='FUV']
     nuv = galex_table[galex_table['filters']=='NUV']
     
@@ -207,7 +221,12 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=Tr
     if subdirs and os.path.exists(f'{savedir}/{name}/'):
         return 0, "Already run", None
     
+    start = time.time ()
     topull, names = get_galexobs ( ra, dec, **kwargs )
+    if verbose:
+        print(f'Identified GALEX observations in {time.time() - start:.2f} seconds.')
+        start = time.time ()
+        
     if topull is None:
         print(f'No Galex observations found for {name}')
         return 1, f'No Galex observations found for {name}', None
@@ -222,7 +241,9 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=Tr
     open(f'{target}/keys.txt','w').write(f'''FUV,{names[0]}
 NUV,{names[1]}''')    
     manifest = Observations.download_products(topull, download_dir=target, mrp_only=True, cache=False )
-    
+    if verbose:
+        print(f'Downloaded GALEX observations in {time.time() - start:.2f} seconds.')
+        start = time.time ()    
     for fname in manifest:
         lpath = fname['Local Path']
         filename = os.path.basename(lpath)
@@ -239,15 +260,25 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
     """
     Load locally saved GALEX cutouts and package as a minimal FITS for a target.
 
-    Parameters:
-        name (str): Name of the target.
-        datadir (str): Directory containing the GALEX data.
-        verbose (bool, optional): Whether to display verbose information (default is True).
-        infer_names (bool, optional): Whether to infer the names of the cutouts if keys.txt is not present (default is False).
+    Args:
+        name: str - Name of the target.
+        datadir: str - Directory containing the GALEX data.
+        center: tuple or astropy.coordinates.SkyCoord - Center coordinates for the cutout, either as pixel coordinates 
+                (tuple) or as RA/DEC (astropy.coordinates.SkyCoord).
+        sw: int - Width of the cutout.
+        sh: int - Height of the cutout.
+        verbose: bool - Whether to display verbose information (default is True).
+        infer_names: bool - Whether to infer the names of the cutouts if keys.txt is not present (default is False).
+        fits_names: dict, list, tuple, or None - FITS names provided directly (default is None).
+        subdirs: bool - Whether to use subdirectories within the data directory (default is True).
+        clean: bool - Whether to remove FITS files after processing (default is False).
 
-    Returns:
-        dict: A dictionary containing the NUV and FUV cutouts (as fits.HDUList objects) with keys 'nd' and 'fd', respectively.
+    Return:
+        output: dict - A dictionary containing the NUV and FUV cutouts (as fits.HDUList objects) with keys 'nd' and 'fd', respectively.
 
+    Raise:
+        ValueError: If more than one FUV or NUV intensity map is found.
+        OSError: If no FITS names are supplied, keys.txt is missing, and infer_names is disallowed.
     """
     keypath = f'{datadir}/{name}/keys.txt'
     if fits_names is not None:  #  \\ method 1: just give me the FITS       

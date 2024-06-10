@@ -39,7 +39,7 @@ class FilterCurve ( object ):
 class FilterBase ( object ):
     def load_filtercurves ( self,
                             fnames=['FUV','NUV'],#,'g','r','i','z','y'], #'FUV','NUV',
-                            fpaths=['GALEX_GALEX.FUV.dat','GALEX_GALEX.NUV.dat'],
+                            fpaths=['GALEX.FUV','GALEX.NUV'],
                             #fpaths=['GALEX.FUV','GALEX.NUV','HSC-g.txt','HSC-r2.txt',
                             #        'HSC-i2.txt','HSC-z.txt','HSC-Y.txt'], # 'GALEX.FUV','GALEX.NUV',
                             ftype=None, # 'photon','photon',
