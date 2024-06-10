@@ -14,8 +14,9 @@ from . import colors as ec
 plt.rcParams['font.size'] = 14
 
 common_labels = {
-    'logmstar':r'$\log_{10}(M_\bigstar/M_\odot)$',                          # \\ log10 of stellar mass
-    'logmhi':r'$\log_{10}(M_{\rm HI}/M_\odot)$',                            # \\ log10 of HI mass
+    'mstar':r'M$_\bigstar$ [M$_\odot$]',                                    # \\ stellar mass
+    'logmstar':r'$\log_{10}(\rm M_\bigstar/M_\odot)$',                          # \\ log10 of stellar mass
+    'logmhi':r'$\log_{10}(\rm M_{\rm HI}/M_\odot)$',                            # \\ log10 of HI mass
     'logsfr':r'$\log_{10}\left(\rm SFR/[M_\odot\ {\rm yr}^{-1}]\right)$',   # \\ log10 of SFR
     'sfr':r'SFR [$\rm M_\odot\ {\rm yr}^{-1}$]',                            # \\ SFR
     'specz':r'$z_{\rm spec}$',                                              # \\ spectroscopic redshift
@@ -630,6 +631,7 @@ def running_quantile ( x,
            
     qt = [alpha, 0.5, 1.-alpha]
     out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
+    
     if show_counts:
         xmid, ystat, counts = out        
     else:
@@ -681,7 +683,14 @@ def running_quantile ( x,
                         
             if err_format == 'fill_between':
                 for eidx in range(2):
-                    ax.plot ( bins, ypad[:,eidx], **kwargs)
+                    ax.plot ( xmid, ystat[:,eidx*2,2], dashes=[5,2.5], **kwargs)
+                    ax.fill_between(
+                        xmid,
+                        ystat[:,eidx*2,1],
+                        ystat[:,eidx*2,3],
+                        alpha=err_alpha,                        
+                        **kwargs
+                    )
             else:
                 ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=std_alpha,**kwargs )           
     else:
