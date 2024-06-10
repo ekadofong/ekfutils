@@ -122,3 +122,54 @@ def cutout_from_fits ( name, source_name, cutout_dir):
     cutout.name = name
     cutout.source_name = source_name
     return cutout
+
+
+
+class GalacticExtinction ( FilterBase ):
+    def __init__(self, av=None, extinction_path=None, filter_directory='./' ):
+        if (av is not None) and (extinction_path is not None):
+            raise ValueError ("Cannot specify both AV and an extinction table!")
+        elif av is not None:
+            self.av = av
+        else:
+            dust_raw = open(extinction_path,'r').readlines()
+            dust = pd.read_csv(extinction_path, skiprows=16, 
+                            delim_whitespace=True, names=[ dr[1:] for dr in dust_raw[13].split() ][1:-1])
+            dust_indices = pd.read_csv(extinction_path.replace('extinction.tbl','dustmap_indexkey.csv'), index_col=0)
+            dust.index = dust_indices.index
+            self.galext = dust 
+            av = self.galext.loc[str(name), 'AV_SandF'] #XXX
+            self. av = av
+        self.load_filtercurves(prefix_path=filter_directory)
+    
+    def get_Alambda ( self, Av, filter_name, Rv=3.1 ):
+        '''
+        Using the package extinction's implementation of the Fitzpatrick+1999 Galactic
+        extinction curve, compute A_lambda over a broadband filter.
+        '''
+        if filter_name not in self.filter_curves.keys():
+            raise NameError (f"{filter_name} is not a filter that has been loaded!")
+        cfilt = self.filter_curves[filter_name]
+
+        ftype = cfilt.filter_type
+        if ftype == 'photon':
+            fn = lambda w,f,t: np.trapz(t*f*w,w)
+        elif ftype == 'energy':
+            fn = lambda w,f,t: np.trapz(t*f,w)
+
+        wv = cfilt.transmission[:,0]
+        Alambda_inst = extinction.fitzpatrick99 ( wv, Av, Rv )    
+        Alambda_eff = fn (wv, Alambda_inst, cfilt.transmission[:,1] )
+        Alambda_eff /= fn(wv, np.ones_like(wv), cfilt.transmission[:,1] )
+        #keff = fn(wv, kc, cfilt.transmission[:,1])/fn(wv,np.ones_like(kc),cfilt.transmission[:,1])
+        return Alambda_eff #keff * Av / Rv
+    
+    def deredden ( self, filter_name, Rv=3.1, verbose=False ):
+        av = self.av 
+        
+        if verbose:
+            print(f'[GalExt] extinction over is A_V={av}')
+            
+        alambda = self.get_Alambda ( av, filter_name, Rv )
+        factor = 10**(0.4*alambda)
+        return factor
