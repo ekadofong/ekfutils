@@ -68,28 +68,29 @@ def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=100, oversample=5 ):
             break   
     return sample  
 
-def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear', ngrid=10000,):    
+def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear', ngrid=10000, return_indices=False, verify=True):    
     """
-    Generate random samples from a probability distribution defined by its PDF.
+    Process the input variable and generate samples based on probability distribution.
 
-    Parameters:
-    - var (list or tuple): The variable or range of variables to sample from. If a single variable, 
-      it can be a list or tuple defining the range. If multiple variables, each element should be a 1D array 
-      defining the values for that variable.
-    - prob (ndarray): The probability density function (PDF) evaluated at the values in 'var'. If 'var' is 
-      a single variable, 'prob' should be a 1D array. If 'var' contains multiple variables, 'prob' should be a 
-      2D array where each row corresponds to a flattened version of the PDF for each variable.
-    - nsamp (int): The number of samples to generate (default is 100).
-    - is_bounds (bool): Indicates if 'var' represents bounds for a range (default is False).
-    - spacing (str): The spacing type for generating the variable grid. Either 'linear' or 'log' (default is 'linear').
-    - ngrid (int): The number of grid points to use when generating the variable grid (default is 10000).
+    Args:
+        var : Union[list, np.ndarray] - Input variable which can be a list or numpy array.
+        is_bounds : bool - Flag indicating whether bounds are provided.
+        spacing : str - Type of spacing ('linear' or 'log') for generating variables if bounds are provided.
+        ngrid : int - Number of grid points for spacing.
+        prob : Callable - Probability distribution function.
+        nsamp : int - Number of samples to generate.
+        return_indices : bool - Flag indicating whether to return the indices along with the coordinates.
 
-    Returns:
-    - ndarray: A 2D array where each row contains a set of samples for each variable.
-    """        
+    Return:
+        samples : Union[np.ndarray, Tuple[np.ndarray, np.ndarray]] - Generated samples. If return_indices is True, returns a tuple of samples and indices.
+    
+    Raise:
+        AssertionError: If the standard deviation of the differences divided by their mean is not less than 1e-5 when bounds are not provided.
+    """       
     if not isinstance(var, list):        
         if not is_bounds:
-            assert np.std(np.diff(var))/np.mean(np.diff(var)) <  1e-5
+            if verify:
+                assert np.std(np.diff(var))/np.mean(np.diff(var)) <  1e-5
         else:            
             if spacing == 'linear':                          
                 var = np.linspace(*var,ngrid)                
@@ -97,7 +98,11 @@ def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear', n
             elif spacing == 'log':
                 var = np.logspace(*var,ngrid)
                 prob = prob(var) * var * np.log(10.)               
-        return np.random.choice( var, p=prob/prob.sum(), size=nsamp)
+        if return_indices:
+            indices = np.random.choice( np.arange(len(var)), p=prob/prob.sum(), size=nsamp)
+            return var[indices], indices
+        else:
+            return np.random.choice( var, p=prob/prob.sum(), size=nsamp)
     else:
         indices = np.arange(var[0].size)#.reshape(var[0].shape)
         flattened_prob  = prob.flatten()
@@ -106,7 +111,10 @@ def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear', n
         coords = np.zeros ( [len(var), nsamp] )
         for idx in range(len(var)):
             coords[idx] = var[idx].flatten()[pulled_indices]
-        return coords
+        if return_indices:
+            return coords, pulled_indices    
+        else:
+            return coords
 
 def iqr ( ys, alpha=0.16 ):
     return np.subtract(*np.nanquantile(ys, [1.-alpha, alpha]))
