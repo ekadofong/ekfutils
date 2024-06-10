@@ -102,3 +102,39 @@ def skewnormal ( t, xi, w, a ):
     t0 = np.exp(-(t-xi)**2 / (2.*w**2))
     t1 = 1. + erf( a*(t-xi)/np.sqrt(2.*w**2) )
     return prefactor * t0 * t1
+
+def laplace_pdf(x, mu, b):
+    """
+    Calculate the probability density function of the Laplace distribution.
+
+    Parameters:
+    x : float or numpy array
+        Point(s) at which to evaluate the PDF.
+    mu : float
+        Location parameter of the Laplace distribution.
+    b : float
+        Scale parameter of the Laplace distribution.
+
+    Returns:
+    float or numpy array
+        The probability density at each point x.
+    """
+    return (1 / (2 * b)) * np.exp(-np.abs(x - mu) / b)
+
+def cauchy_pdf(x, x0, gamma):
+    """
+    Calculate the probability density function of the Cauchy distribution.
+
+    Parameters:
+    x : float or numpy array
+        Point(s) at which to evaluate the PDF.
+    x0 : float
+        Location parameter of the Cauchy distribution.
+    gamma : float
+        Scale parameter of the Cauchy distribution.
+
+    Returns:
+    float or numpy array
+        The probability density at each point x.
+    """
+    return 1 / (np.pi * gamma * (1 + ((x - x0) / gamma)**2))
