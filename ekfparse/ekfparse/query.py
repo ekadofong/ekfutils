@@ -67,6 +67,24 @@ class DustEngine ( object ):
                 return np.concatenate([xl])
 
     def get_SandFAV ( self, ra, dec, unit='deg', match_radius=None, verbose=0, **kwargs ):
+        """
+        Retrieve the A_V from Schlafly and Finkbeiner (2011) value for given right ascension and declination.
+
+        Args:
+            ra : float - Right ascension of the target location.
+            dec : float - Declination of the target location.
+            unit : str - Unit of the coordinates (default is 'deg').
+            match_radius : Optional[float] - Radius within which to match coordinates from the cache (default is None).
+            verbose : int - Verbosity level for logging information (default is 0).
+            **kwargs : dict - Additional arguments that may include 'region_size' for match radius.
+
+        Return:
+            av : float - Averaged A_V from Schlafly and Finkbeiner (2011) value for the given coordinates.
+
+        Raise:
+            None
+        """
+            
         if match_radius is None:
             if 'region_size' in kwargs.keys():
                 match_radius = kwargs['region_size'] * u.deg
