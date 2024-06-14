@@ -31,11 +31,12 @@ common_labels = {
     'ssfr':r'sSFR [${\rm yr}^{-1}$]',                                       # \\ specific SFR
     'burstiness':r'$\log_{10}(\langle {\rm SFR} \rangle_{10}/ \langle {\rm SFR} \rangle_{100})$',
                                                                             # \\ <SFR>_10 / <SFR>_100
-    'hauv':r'$\mathcal{R}=\log_{10}(L(H\alpha)/L(\rm FUV))$',                # \\ L(Ha)/L(FUV)    
+    'hauv':r'$\mathcal{R}=\log_{10}(\rm L(H\alpha)/L(\rm FUV))$',                # \\ L(Ha)/L(FUV)    
     'reff':r'$\rm R_{eff}$ [kpc]',                                          # \\ effective radius
     'logreff':r"$\rm \log_{10}(R_{eff}/[kpc])$",                            # \\ log10 of Reff
     'ra':'RA [deg]',                                                        # \\ RA
     'dec':"Dec [deg]",                                                      # \\ DEC
+    'iqr':lambda x: r'$\langle %s \rangle_{84} - \langle %s \rangle_{16}$' % (x,x)  # \\ Inner ``quantile'' range
 }
 
 common_units={
@@ -393,7 +394,8 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
     if 'cmap' in kwargs.keys():
         scatter_kwargs['cmap'] = kwargs['cmap']
         del kwargs['cmap']
-        
+    
+    print(yerr)   
     if c is None:
         ax.errorbar (
                     x,
