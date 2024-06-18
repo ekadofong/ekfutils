@@ -36,7 +36,9 @@ common_labels = {
     'logreff':r"$\rm \log_{10}(R_{eff}/[kpc])$",                            # \\ log10 of Reff
     'ra':'RA [deg]',                                                        # \\ RA
     'dec':"Dec [deg]",                                                      # \\ DEC
-    'iqr':lambda x: r'$\langle %s \rangle_{84} - \langle %s \rangle_{16}$' % (x,x)  # \\ Inner ``quantile'' range
+    'iqr':lambda x: r'$\langle %s \rangle_{84} - \langle %s \rangle_{16}$' % (x,x),  
+                                                                            # \\ Inner ``quantile'' range
+    'av':r'$A_V$',                                                          # \\ Optical extinction
 }
 
 common_units={
