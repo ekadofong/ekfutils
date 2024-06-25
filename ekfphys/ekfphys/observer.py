@@ -42,6 +42,11 @@ def balmerdecrement_to_av ( balmerdecrement, intrinsicratio=2.86, RV=4.05 ):
     AV = RV*phi/dk
     return AV    
 
+def alambda_to_av ( alambda, wv_eff, rv=4.05 ):
+    kl = extinction.calzetti00 ( np.array([wv_eff]), 1., 1. ) - 1. 
+    av = alambda*(1. + kl/rv)**-1
+    return av
+
 def extinction_correction ( wavelength, av, u_av=None, RV=4.05, curve=None, return_magcorr=False ):
     if curve is None:
         curve = extinction.calzetti00
