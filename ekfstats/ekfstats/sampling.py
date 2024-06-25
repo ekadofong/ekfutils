@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import optimize
 from scipy import interpolate,integrate
-from scipy.stats import gaussian_kde
+from scipy.stats import gaussian_kde, sigmaclip
 from statsmodels.stats.proportion import proportion_confint
 from . import functions
 
@@ -38,7 +38,7 @@ def rejection_sample_fromarray ( x, y, nsamp=10000 ):
     sample = rejection_sample ( x, pdf_x, nsamp )
     return sample
 
-def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=100, oversample=5 ):    
+def rejection_sample ( x, pdf_x, nsamp=10000, maxiter=100, oversample=5):    
     '''
     Do rejection sampling for a probability density function
     that is known over a set of points x
@@ -97,7 +97,7 @@ def sample_from_pdf ( var, prob, nsamp=100, is_bounds=False, spacing='linear', n
                 prob = prob(var)                 
             elif spacing == 'log':
                 var = np.logspace(*var,ngrid)
-                prob = prob(var) * var * np.log(10.)               
+                prob = prob(var) * var * np.log(10.)                       
         if return_indices:
             indices = np.random.choice( np.arange(len(var)), p=prob/prob.sum(), size=nsamp)
             return var[indices], indices
@@ -202,16 +202,28 @@ def dynamic_upsample ( x, p, N=100 ):
         cx[idx] = x_i + dx_opt
     return cx, p(cx)
 
-def bootstrap_metric ( x, metric_fn, npull=1000, err_type='1684', quantiles=None ):
+def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quantiles=None, vartype='linear' ):
     if err_type == '1684_combined':
         efunc = lambda foo: np.subtract(*np.quantile(foo, [0.84, 0.16]))
     elif err_type == '1684':
         efunc = lambda foo: np.quantile(foo, [0.16, 0.84])
+    elif err_type == '0595':
+        efunc = lambda foo: np.quantile(foo, [0.05,0.95])        
     elif err_type == 'std':
         efunc = lambda foo: np.std(foo)
     elif err_type == 'quantiles':
         efunc = lambda foo: np.quantile(foo, quantiles)
-    resamp = np.random.choice ( x, size=[npull, x.size] )
+    
+    if u_x is not None:
+        _resamp = np.random.normal ( x, u_x )  
+        if vartype == 'log10':
+            _resamp = np.log10(_resamp)      
+        resamp = np.random.choice( _resamp, size=[npull,x.size] )        
+    else:
+        resamp = np.random.choice ( x, size=[npull, x.size] )
+        if vartype == 'log10':
+            resamp = np.log10(resamp)
+    
     try:
         resampled_metric = metric_fn ( resamp, axis=1 )
     except TypeError:
@@ -335,3 +347,6 @@ def classfraction ( x_classa, x_classb, bins=10, add=False, alpha=0.05, method='
         denom = histb
     confidence_interval = proportion_confint ( hista, denom, alpha=alpha, method=method)
     return bin_edges, hista/denom, confidence_interval
+
+def sigmaclipped_std ( x, low=4., high=4. ):
+    return sigmaclip(x,low,high).clipped.std()

@@ -5,6 +5,7 @@ from matplotlib import gridspec
 from matplotlib import transforms
 from matplotlib import patches
 from matplotlib import patheffects
+from matplotlib.colors import LogNorm
 from scipy.integrate import quad
 from scipy import ndimage
 from astropy import units as u
@@ -38,7 +39,7 @@ common_labels = {
     'dec':"Dec [deg]",                                                      # \\ DEC
     'iqr':lambda x: r'$\langle %s \rangle_{84} - \langle %s \rangle_{16}$' % (x,x),  
                                                                             # \\ Inner ``quantile'' range
-    'av':r'$A_V$',                                                          # \\ Optical extinction
+    'av':r'${\rm A}_V$',                                                          # \\ Optical extinction
 }
 
 common_units={
@@ -49,10 +50,13 @@ common_units={
 }
 
 def convert_label_to_log ( label, single_spaced=False ):
-    unit = re.findall('(?<=\[).*(?=\])', label)[0]
+    unit = re.findall('(?<=\[).*(?=\])', label)
     name = re.sub('\[.*\]', '', label)
-    
-    return r'$\log_{10}($ ' + name + '/[' + unit + '] )'
+    if len(unit)>0:
+        unit = unit[0]
+        return r'$\log_{10}($' + name + '/[' + unit + '])'
+    else:
+        return r'$\log_{10}($' + name + '$)$'
 
 def convert_label_to_pdf ( label ):
     return f'dN/d{label}'     
@@ -230,6 +234,7 @@ def hist2d (
         ax=None,
         xscale='linear',
         yscale='linear',
+        zscale='linear',
         show_proj=False,
         figsize=None,
         cmap = 'Greys',
@@ -266,7 +271,7 @@ def hist2d (
         nbins = 10
     elif isinstance(bins, int):
         nbins = bins
-        
+
 
     if (bins is None) or isinstance(bins, int):   
         scale_fns = {'linear': lambda input: np.linspace ( *np.quantile(input[np.isfinite(input)], 
@@ -274,6 +279,9 @@ def hist2d (
                     'log':lambda input: np.logspace ( *np.quantile(np.log10(input)[np.isfinite(np.log10(input))], 
                                                                    [alpha, 1.-alpha]), nbins)}
         bins = [scale_fns[xscale](x), scale_fns[yscale](y)]
+        
+    if zscale == 'log':
+        kwargs['norm'] = LogNorm ()
     im = ax.hist2d ( x,y, bins=bins, cmap=cmap, **kwargs ) # counts, xbins, ybins
     ax.set_xscale(xscale)
     ax.set_yscale(yscale)
@@ -397,7 +405,7 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         scatter_kwargs['cmap'] = kwargs['cmap']
         del kwargs['cmap']
     
-    print(yerr)   
+    
     if c is None:
         ax.errorbar (
                     x,
@@ -460,7 +468,7 @@ def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1,
     c_im, ax = density_contour ( data_x, data_y, ax, cmap=cmap, quantiles=quantiles, filled=True, **kwargs )  
     return (s_im, c_im), ax
 
-def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False, **kwargs):
+def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False,binalpha=0.005, **kwargs):
     """
     Draw contour lines or filled contours representing the density of data points.
 
@@ -491,13 +499,20 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
     """
     if ax is None:        
         ax = plt.subplot(111)
-    fmask = functions.finite_masker ( [data_x, data_y] )
-    data_x = data_x[fmask]
-    data_y = data_y[fmask]
+    
+    data_x, data_y = functions.fmasker ( data_x, data_y) 
 
-    gkde = sampling.c_density ( data_x,data_y, return_fn=True, nmin=0 )    
-    grid_x = np.linspace(data_x.min(),data_x.max(),npts)
-    grid_y = np.linspace(data_y.min(),data_y.max(),npts)    
+    xlim = np.quantile(data_x, [binalpha, 1.-binalpha])
+    ylim = np.quantile(data_y, [binalpha, 1.-binalpha])
+    data_x[(data_x>xlim[1])|(data_x<xlim[0])] = np.NaN
+    data_y[(data_y>ylim[1])|(data_y<ylim[0])] = np.NaN    
+    data_x, data_y = functions.fmasker ( data_x, data_y) 
+    
+    gkde = sampling.c_density ( data_x, data_y, return_fn=True, nmin=0 )
+      
+    grid_x = np.linspace(*xlim,npts)
+    grid_y = np.linspace(*ylim,npts)   
+
     vecx,vecy = np.meshgrid(grid_x, grid_y )
     vecz = gkde((vecx.ravel(),vecy.ravel())).reshape(vecx.shape)
     # \\ np.trapz(np.trapz(vecz, vecx), grid_y) == 1 for a normalized GKDE

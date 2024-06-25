@@ -45,6 +45,11 @@ def sigmoid ( sigmoid_x, bound, k ):
     sigmoid_y = ( 1. + np.exp(-k*(sigmoid_x - bound)))**-1
     return sigmoid_y
 
+def powerlaw ( x, index, normalization ):
+    return normalization * x**index
+
+
+
 def schechter ( m, phi_ast, M_ast, alpha ):
     '''                                                                         
     phi(M) = dN/dM                                                              
