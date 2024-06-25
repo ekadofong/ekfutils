@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, curve_fit
 from astropy.modeling.models import Sersic1D, Sersic2D, Const1D, Const2D
 from astropy.modeling.fitting import LevMarLSQFitter
 import emcee
@@ -512,3 +512,41 @@ def ellipse_from_point ( x,y, ellip=0., theta=0. ):
     semimajor = hypot * np.sqrt ( np.cos(phi)**2 + np.sin(phi)**2/(1.-ellip)**2 )
     return semimajor
 
+def poly2d ( x, y, coeffs, deg ):
+    z_pred = np.zeros_like(x)
+    tuples_list = [(i, j) for i in range(deg+1) for j in range(deg+1) if i + j <= deg]    
+    
+    expected_length = (deg+1)*(deg+2)//2
+    assert len(tuples_list) == expected_length
+    for idx,(i,j) in enumerate(tuples_list):
+        #k = i+j        
+        z_pred += coeffs[idx] * x**i * y**j
+    return z_pred
+
+def print_poly2d ( coeffs, deg ):
+    tuples_list = [(i, j) for i in range(deg+1) for j in range(deg+1) if i + j <= deg]    
+    st = []
+    for idx,(i,j) in enumerate(tuples_list):
+        if (i==0) and (j>0):
+            term = f'{coeffs[idx]:.4f}y^{j}'
+        elif (j==0) and (i>0):
+            term = f'{coeffs[idx]:.4f}x^{i}'
+        elif (i==0) and (j==0):
+            term = f'{coeffs[idx]:.4f}'
+        else:
+            term = f'{coeffs[idx]:.4f}x^{i}y^{j}'
+        st.append(term)
+    st = " + ".join(st)
+    print(st)
+
+def polyfit2d ( x, y, z, deg):
+    x,y,z = ef.fmasker(x,y,z)
+    xy = np.vstack((x,y))
+    
+    ncoeffs = (deg + 1)*(deg + 2)//2
+    poly_spec = lambda xy, *args: poly2d ( xy[0], xy[1], args, deg)
+    
+    initial_guess = (np.ones(ncoeffs, dtype=float), )
+    params, covariance = curve_fit(poly_spec, xy, z, p0=initial_guess)
+    
+    return params, covariance
