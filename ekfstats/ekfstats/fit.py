@@ -526,6 +526,24 @@ class BaseInferer (object):
             
             return -0.5 *np.sum(  dev + eterm  )    
         return lnP
+    
+        def plot_uncertainties (self, ms, ax, color='k', erralpha=0.1, alpha=0.32, discard=100, yscale='linear', label=None, show_std=True, lw=2, **kwargs ):
+            predictions = self.get_uncertainties ( ms, alpha=alpha, discard=discard  )
+            params = self.get_param_estimates ()
+            
+            if yscale=='linear':
+                ax.plot(ms, predictions[1],color=color, label=label, **kwargs)
+                ax.fill_between(ms, predictions[0], predictions[2], alpha=erralpha, color=color, **kwargs)
+                if show_std:                
+                    for sign in [-1.,1.]:
+                        ax.plot(ms, predictions[1] + sign*params[1,2], color=color, label=label, **kwargs)
+            elif yscale=='log':
+                ax.plot(ms, 10.**predictions[1],color=color, label=label, lw=lw, **kwargs)
+                ax.fill_between(ms, 10.**predictions[0], 10.**predictions[2], alpha=erralpha, color=color, **kwargs)    
+                if show_std:
+                    for sign in [-1.,1.]:
+                        ax.plot(ms,10.**(predictions[1] + sign*params[1,2]), color=color, label=label, lw=lw/2., **kwargs)                    
+            return ax    
 
 def plawparams_from_pts (xs, ys):
     m = (ys[1]-ys[0])/(xs[1]-xs[0])
