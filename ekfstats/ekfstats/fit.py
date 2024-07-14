@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.signal import correlate
 from scipy.optimize import minimize, curve_fit
 from astropy.modeling.models import Sersic1D, Sersic2D, Const1D, Const2D
 from astropy.modeling.fitting import LevMarLSQFitter
@@ -495,6 +496,36 @@ class BaseInferer (object):
                 ax.plot ( chain[:, windex, aindex], color='lightgrey', alpha=0.3)     
                 
         return fig, axarr        
+    
+    def define_gaussianlikelihood (self, model_fn ):
+        def lnP ( theta, data ):
+            '''
+            Compute the log-likelihood of the data given the model parameters.
+
+            Args:
+                theta (array-like): Model parameters (m, b, s).
+                x (array-like): Independent variable data.
+                y (array-like): Dependent variable data.
+                yerr (array-like): Measurement errors in the dependent variable.
+                weights (array-like or None): Weights for the data points. Defaults to None.
+
+            Returns:
+                float: Log-likelihood of the data given the model parameters.
+            '''
+            x, y, yerr, xerr = data
+             
+            if xerr is not None:
+                x = np.random.normal(x,xerr)
+                
+
+            model = model_fn(x,*theta)
+            sigma2 = yerr**2 #+ s**2 
+
+            dev = (y - model) ** 2 / sigma2
+            eterm = np.log(2.*np.pi*sigma2)
+            
+            return -0.5 *np.sum(  dev + eterm  )    
+        return lnP
 
 def plawparams_from_pts (xs, ys):
     m = (ys[1]-ys[0])/(xs[1]-xs[0])
@@ -550,3 +581,76 @@ def polyfit2d ( x, y, z, deg):
     params, covariance = curve_fit(poly_spec, xy, z, p0=initial_guess)
     
     return params, covariance
+
+def crosscorrelate(ts, x, y, return_tau=True, normalize=True):
+    """
+    Computes the cross-correlation between two signals, optionally returning the lag at which the
+    maximum correlation occurs and normalizing the correlation coefficients.
+
+    Parameters:
+        ts (array_like): Time stamps for the signal data points. Assumed to be equally spaced.
+        x (array_like): First signal array.
+        y (array_like): Second signal array.
+        return_tau (bool): If True, returns the lag at which the maximum correlation occurs.
+        normalize (bool): If True, normalizes the cross-correlation to lie between -1 and 1.
+
+    Returns:
+        tuple or np.ndarray: If return_tau is True, returns a tuple (cross-correlation array, lag at max correlation).
+                             If return_tau is False, returns just the cross-correlation array.
+
+    Raises:
+        ValueError: If the time stamps are not equally spaced and normalization is required.
+    """
+    # Calculate linear cross-correlation
+    linearcorrelation = correlate(x, y, mode='full')
+
+    # Calculate lags assuming equidistant time stamps
+    if np.any(np.diff(np.diff(ts)) != 0):  # Check if spacing is not fixed
+        raise ValueError("Time stamps must be equally spaced for this calculation.")
+    
+    lags = np.arange(-len(x) + 1, len(x)) * np.mean(np.diff(ts))
+    best_lag = lags[np.argmax(linearcorrelation)]
+    
+    if normalize:
+        autocorr_x = correlate(x, x, mode='full')
+        autocorr_y = correlate(y, y, mode='full')
+        normalization = np.sqrt(autocorr_x[len(x)-1] * autocorr_y[len(y)-1])
+        linearcorrelation /= normalization
+    
+    if return_tau:
+        return lags, linearcorrelation, best_lag
+    else:
+        return lags, linearcorrelation
+
+
+def partial_covariance(x, y, z):
+    """
+    Computes the partial covariance between two variables x and y, controlling for the variable z.
+    This is done by first regressing x and y on z independently, then calculating the residuals,
+    and finally computing the covariance of these residuals.
+
+    Parameters:
+        x (array_like): The first variable array.
+        y (array_like): The second variable array.
+        z (array_like): The control variable array used to account for its influence on x and y.
+
+    Returns:
+        float: The partial covariance between x and y, adjusted for the influence of z.
+
+    Examples:
+        x = np.array([1, 2, 3, 4, 5])
+        y = np.array([5, 4, 3, 2, 1])
+        z = np.array([1, 3, 5, 7, 9])
+        print(partial_covariance(x, y, z))  # Output might vary based on the actual computations.
+    """
+    # Perform linear regression of z on x and y to find the best fitting line
+    linreg_z2x = np.polyfit(z, x, 1)
+    linreg_z2y = np.polyfit(z, y, 1)
+
+    # Calculate residuals: differences between actual data and the predictions
+    resid_x = x - np.poly1d(linreg_z2x)(z)
+    resid_y = y - np.poly1d(linreg_z2y)(z)
+
+    # Calculate and return the covariance matrix of the residuals
+    pcov = np.cov(resid_x, resid_y)
+    return pcov
