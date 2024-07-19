@@ -52,8 +52,7 @@ def extinction_correction ( wavelength, av, u_av=None, RV=4.05, curve=None, retu
         curve = extinction.calzetti00
     if not hasattr(wavelength, '__len__'):
         wavelength = np.array([wavelength])
-    #k0 = curve ( wavelength, av, RV )    
-    #alambda = av * (k0/RV + 1.) 
+
     alambda = curve(wavelength, av, RV)
     corr = 10.**(alambda/2.5)
     if u_av is not None:

@@ -16,8 +16,10 @@ plt.rcParams['font.size'] = 14
 
 common_labels = {
     'mstar':r'M$_\bigstar$ [M$_\odot$]',                                    # \\ stellar mass
-    'logmstar':r'$\log_{10}(\rm M_\bigstar/M_\odot)$',                          # \\ log10 of stellar mass
-    'logmhi':r'$\log_{10}(\rm M_{\rm HI}/M_\odot)$',                            # \\ log10 of HI mass
+    'mhalo':r'M$_{\rm halo}$ [M$_\odot$]',                                  # \\ halo mass
+    'm200':r'M$_{200}$ [M$_\odot$]',                                        # \\ M200c
+    'logmstar':r'$\log_{10}(\rm M_\bigstar/M_\odot)$',                      # \\ log10 of stellar mass
+    'logmhi':r'$\log_{10}(\rm M_{\rm HI}/M_\odot)$',                        # \\ log10 of HI mass
     'logsfr':r'$\log_{10}\left(\rm SFR/[M_\odot\ {\rm yr}^{-1}]\right)$',   # \\ log10 of SFR
     'sfr':r'SFR [$\rm M_\odot\ {\rm yr}^{-1}$]',                            # \\ SFR
     'specz':r'$z_{\rm spec}$',                                              # \\ spectroscopic redshift
