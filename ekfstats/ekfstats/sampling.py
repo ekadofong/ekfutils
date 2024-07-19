@@ -202,7 +202,7 @@ def dynamic_upsample ( x, p, N=100 ):
         cx[idx] = x_i + dx_opt
     return cx, p(cx)
 
-def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quantiles=None, vartype='linear' ):
+def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quantiles=None, vartype='linear', verbose=True):
     if err_type == '1684_combined':
         efunc = lambda foo: np.subtract(*np.quantile(foo, [0.84, 0.16]))
     elif err_type == '1684':
@@ -213,7 +213,7 @@ def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quan
         efunc = lambda foo: np.std(foo)
     elif err_type == 'quantiles':
         efunc = lambda foo: np.quantile(foo, quantiles)
-    
+        
     if u_x is not None:
         _resamp = np.random.normal ( x, u_x )  
         if vartype == 'log10':
@@ -227,7 +227,8 @@ def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quan
     try:
         resampled_metric = metric_fn ( resamp, axis=1 )
     except TypeError:
-        print('Cannot do array math with input metric function; looping:')
+        if verbose:
+            print('Cannot do array math with input metric function; looping:')
         resampled_metric = np.array([ metric_fn(ix) for ix in resamp ])
     
     emetric = efunc(resampled_metric)
@@ -235,7 +236,7 @@ def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quan
     
     
     
-def bootstrap_histcounts(r,bins=10,npull=1000,w=None, **kwargs):    
+def bootstrap_histcounts(r,bins=10,npull=1000,w=None,err=0., **kwargs):    
     y_arr = np.zeros([npull, len(bins)-1])
     for idx in range(npull):
         resample = np.random.choice(np.arange(len(r)),len(r))
@@ -244,7 +245,7 @@ def bootstrap_histcounts(r,bins=10,npull=1000,w=None, **kwargs):
         else:
             weights = w[resample]
         y_r,_ = np.histogram(
-            r[resample],
+            np.random.normal(r,err)[resample],
             bins=bins, 
             weights=weights,
             **kwargs
