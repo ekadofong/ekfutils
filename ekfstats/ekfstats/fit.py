@@ -482,8 +482,23 @@ class BaseInferer (object):
         discard = int(self.sampler.get_chain().shape[0]*fdiscard)
         fchain = self.sampler.get_chain(flat=True, discard=discard)
         return np.quantile(fchain, [alpha/2.,.5,1. - alpha/2.], axis=0)            
+    
+    def predict_from_run ( self, x ) :
+        """
+        Predicts the MaPost model for a given input value(s) using the model parameters obtained from a previous run.
+
+        Args:
+        - x: A single value or a 1D numpy array of values for which to predict the median and bounds.
+
+        Returns:
+        - prediction: A 1D numpy array with three elements representing the median and upper/lower bounds of the model predictions for the given input value(s).
+        """        
+        assert hasattr(self, 'predict'), "No prediction function stored!"
+        args = self.get_param_estimates ()[1]
+        prediction = self.predict ( x, *args )
+        return prediction    
         
-    def plot_chain (self, fsize=2):
+    def plot_chain (self, labels=None, fsize=2):
         import matplotlib.pyplot as plt 
         
         chain = self.sampler.get_chain ()
@@ -494,8 +509,14 @@ class BaseInferer (object):
         for aindex, ax in enumerate(axarr):
             for windex in range(self.sampler.nwalkers):
                 ax.plot ( chain[:, windex, aindex], color='lightgrey', alpha=0.3)     
+            ax.axhline ( np.median(chain[:,:,aindex]), color='k')
+            if labels is not None:
+                ax.set_ylabel(labels[aindex])
                 
-        return fig, axarr        
+        return fig, axarr    
+    
+    def set_predict ( self, model_fn ):
+        self.predict = model_fn    
     
     def define_gaussianlikelihood (self, model_fn ):
         def lnP ( theta, data ):
@@ -517,7 +538,6 @@ class BaseInferer (object):
             if xerr is not None:
                 x = np.random.normal(x,xerr)
                 
-
             model = model_fn(x,*theta)
             sigma2 = yerr**2 #+ s**2 
 
@@ -527,23 +547,33 @@ class BaseInferer (object):
             return -0.5 *np.sum(  dev + eterm  )    
         return lnP
     
-        def plot_uncertainties (self, ms, ax, color='k', erralpha=0.1, alpha=0.32, discard=100, yscale='linear', label=None, show_std=True, lw=2, **kwargs ):
-            predictions = self.get_uncertainties ( ms, alpha=alpha, discard=discard  )
-            params = self.get_param_estimates ()
-            
-            if yscale=='linear':
-                ax.plot(ms, predictions[1],color=color, label=label, **kwargs)
-                ax.fill_between(ms, predictions[0], predictions[2], alpha=erralpha, color=color, **kwargs)
-                if show_std:                
-                    for sign in [-1.,1.]:
-                        ax.plot(ms, predictions[1] + sign*params[1,2], color=color, label=label, **kwargs)
-            elif yscale=='log':
-                ax.plot(ms, 10.**predictions[1],color=color, label=label, lw=lw, **kwargs)
-                ax.fill_between(ms, 10.**predictions[0], 10.**predictions[2], alpha=erralpha, color=color, **kwargs)    
-                if show_std:
-                    for sign in [-1.,1.]:
-                        ax.plot(ms,10.**(predictions[1] + sign*params[1,2]), color=color, label=label, lw=lw/2., **kwargs)                    
-            return ax    
+    def estimate_y (self, ms, alpha=0.32, npull=10000, discard=100):
+        """
+        Get upper and lower bound estimates [16th/84th] in the prediction space
+        """
+        #ax.plot ( ms, ms*pout[0] + pout[1], color=colors_d[source].modulate(0.4,0.).base, zorder=0 )
+        fchain = self.sampler.get_chain(flat=True, discard=discard)
+        parr = np.zeros([npull, ms.size])
+        for idx in np.arange(parr.shape[0]):
+            pull = fchain[np.random.randint(0, fchain.shape[0])]
+            parr[idx] = self.predict ( ms, *pull )
+        return np.quantile(parr, [alpha/2.,.5,1.-alpha/2.], axis=0)    
+    
+    def plot_uncertainties (self, ms, ax, color='k', transparency=0.9, alpha=0.32, 
+                            discard=100,xscale='linear', yscale='linear', label=None, show_std=True, lw=2, **kwargs ):
+        predictions = self.estimate_y ( ms, alpha=alpha, discard=discard  )
+        if xscale == 'linear':
+            plot_ms = ms
+        elif xscale == 'log':
+            plot_ms = 10.**ms
+        if yscale=='linear':
+            ax.plot(plot_ms, predictions[1],color=color, label=label, **kwargs)
+            ax.fill_between(plot_ms, predictions[0], predictions[2], alpha=1.-transparency, color=color, **kwargs)
+        elif yscale=='log':
+            ax.plot(plot_ms, 10.**predictions[1],color=color, label=label, lw=lw, **kwargs)
+            ax.fill_between(plot_ms, 10.**predictions[0], 10.**predictions[2], alpha=1.-transparency, color=color, **kwargs)    
+                   
+        return ax    
 
 def plawparams_from_pts (xs, ys):
     m = (ys[1]-ys[0])/(xs[1]-xs[0])
