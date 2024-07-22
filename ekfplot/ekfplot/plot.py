@@ -124,7 +124,7 @@ def hist (
     if gkde_kwargs is None:
         gkde_kwargs = {}
     
-    x = functions.fmasker(x)#functions.finite_masker(x, inplace=True)[0]
+    x = functions.fmasker(x)
     if isinstance(bins, int):
         if bintype == 'linear':
             bins = np.linspace(*np.nanquantile(x, [binalpha,1.-binalpha]), bins)
@@ -969,7 +969,7 @@ def add_physbar ( xcenter, y, pixscale, distance, ax=None, bar_physical_length =
     xbegin = xcenter - bar_lengthpix/2.
     xend = xcenter + bar_lengthpix/2.
     ypad = abs(np.subtract(*ax.get_ylim())) * 0.05
-    print(ypad)
+
     ax.hlines ( y, xbegin, xend, lw=3, color='k' )
     ax.text ( 
         xcenter, 

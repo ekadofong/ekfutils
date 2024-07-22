@@ -15,6 +15,8 @@ def finite_masker ( arr_l, inplace=False, ul=np.inf, ll=-np.inf ):
         arr_out = []
         for arr in arr_l:
             arr_out.append(arr[mask])
+        if len(arr_out) == 1:
+            return arr_out[0]        
         return arr_out
     else:
         return mask
