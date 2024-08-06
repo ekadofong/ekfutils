@@ -5,6 +5,33 @@ from scipy.stats import gaussian_kde, sigmaclip
 from statsmodels.stats.proportion import proportion_confint
 from . import functions
 
+def finite_masker ( arr_l, inplace=False, ul=np.inf, ll=-np.inf ):
+    '''
+    Returns a mask that is True where both input arrays 
+    are finite-valued
+    '''
+    if not isinstance(arr_l, list):
+        arr_l = list(arr_l)
+    mask = np.isfinite(arr_l[0])&(arr_l[0]<ul)&(arr_l[0]>ll)
+    for arr in arr_l[1:]:
+        mask &= np.isfinite(arr)&(arr<ul)&(arr>ll)
+    if inplace:
+        arr_out = []
+        for arr in arr_l:
+            arr_out.append(arr[mask])
+        if len(arr_out) == 1:
+            return arr_out[0]        
+        return arr_out
+    else:
+        return mask
+    
+def fmasker ( *args ):
+    '''
+    Convenience wrapper for finite_masker that takes
+    arguments and returns in-place.
+    '''
+    return finite_masker(args, inplace=True)
+
 def c_density ( x, y, return_fn=False, clean=True, nmax=None, nmin=30, **kwargs ):
     '''
     Compute gKDE density based on sample
@@ -13,7 +40,7 @@ def c_density ( x, y, return_fn=False, clean=True, nmax=None, nmin=30, **kwargs 
     if x.size < nmin:        
         return np.ones_like(x)
     if clean:
-        fmask = functions.finite_masker ( [x, y] )
+        fmask = finite_masker ( [x, y] )
         if fmask.sum() == 0:
             raise ValueError ("All inf/nan array encountered")
         x = x[fmask]
@@ -351,3 +378,20 @@ def classfraction ( x_classa, x_classb, bins=10, add=False, alpha=0.05, method='
 
 def sigmaclipped_std ( x, low=4., high=4. ):
     return sigmaclip(x,low,high).clipped.std()
+
+def gelmanrubin ( chains ):
+    '''
+    Gelman-Rubin statistic to quantify chain convergence.
+    '''
+    # assume chains are emcee-like, i.e. dimensions are STEP/WALKER/PARAMETER
+    mean_val_of_chains = np.mean(chains,axis=0)
+    mean_of_chainmeans = np.mean(mean_val_of_chains)
+    nsteps = chains.shape[0]
+    nwalkers = chains.shape[1]
+    gr_B = nsteps/(nwalkers-1)*np.sum((mean_val_of_chains-mean_of_chainmeans)**2)
+    mvals = mean_val_of_chains.reshape(1,*mean_val_of_chains.shape)
+    gr_W = nwalkers**-1*((nsteps-1)**-1*np.sum((chains-mvals)**2))
+    
+    gr_R = (nsteps-1)/nsteps * gr_W + nsteps**-1 * gr_B
+    gr_R /= gr_W
+    return gr_R

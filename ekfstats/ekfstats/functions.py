@@ -1,33 +1,6 @@
 import numpy as np
 from scipy.special import erf
 
-def finite_masker ( arr_l, inplace=False, ul=np.inf, ll=-np.inf ):
-    '''
-    Returns a mask that is True where both input arrays 
-    are finite-valued
-    '''
-    if not isinstance(arr_l, list):
-        arr_l = list(arr_l)
-    mask = np.isfinite(arr_l[0])&(arr_l[0]<ul)&(arr_l[0]>ll)
-    for arr in arr_l[1:]:
-        mask &= np.isfinite(arr)&(arr<ul)&(arr>ll)
-    if inplace:
-        arr_out = []
-        for arr in arr_l:
-            arr_out.append(arr[mask])
-        if len(arr_out) == 1:
-            return arr_out[0]        
-        return arr_out
-    else:
-        return mask
-    
-def fmasker ( *args ):
-    '''
-    Convenience wrapper for finite_masker that takes
-    arguments and returns in-place.
-    '''
-    return finite_masker(args, inplace=True)
-
 def wide_kdeBW ( size, alpha=3. ):
     bw = alpha*size**(-1./5.)  
     return bw  
@@ -42,15 +15,13 @@ def gaussian ( x, A, m, s):
 
 def sigmoid ( sigmoid_x, bound, k ):
     '''
-    Sigmoid function.
+    Logistic function.
     '''
     sigmoid_y = ( 1. + np.exp(-k*(sigmoid_x - bound)))**-1
     return sigmoid_y
 
 def powerlaw ( x, index, normalization ):
     return normalization * x**index
-
-
 
 def schechter ( m, phi_ast, M_ast, alpha ):
     '''                                                                         
