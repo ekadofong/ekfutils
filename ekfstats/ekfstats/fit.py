@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.signal import correlate
 from scipy.optimize import minimize, curve_fit
 from astropy.modeling.models import Sersic1D, Sersic2D, Const1D, Const2D
@@ -470,6 +471,7 @@ class BaseInferer (object):
         sampler = emcee.EnsembleSampler(
             nwalkers, self.ndim, self.logprob, args=(data,)
         )
+
         sampler.run_mcmc(initial, steps, progress=progress)
         self.sampler = sampler   
         
@@ -518,7 +520,7 @@ class BaseInferer (object):
     def set_predict ( self, model_fn ):
         self.predict = model_fn    
     
-    def define_gaussianlikelihood (self, model_fn ):
+    def define_gaussianlikelihood (self, model_fn, with_intrinsic_dispersion=True ):
         def lnP ( theta, data ):
             '''
             Compute the log-likelihood of the data given the model parameters.
@@ -534,12 +536,18 @@ class BaseInferer (object):
                 float: Log-likelihood of the data given the model parameters.
             '''
             x, y, yerr, xerr = data
-             
-            if xerr is not None:
-                x = np.random.normal(x,xerr)
+            if with_intrinsic_dispersion:
+                intr_s = theta[-1]
+                theta = theta[:-1]
+                self.has_intrinsic_dispersion = True
+            else:
+                intr_s = 0. 
+                self.has_intrinsic_dispersion = False
+            if xerr is None:
+                xerr = 0.
                 
             model = model_fn(x,*theta)
-            sigma2 = yerr**2 #+ s**2 
+            sigma2 = yerr**2 + intr_s**2 + xerr**2 # \\ XXX Check that this is right!!
 
             dev = (y - model) ** 2 / sigma2
             eterm = np.log(2.*np.pi*sigma2)
@@ -556,11 +564,15 @@ class BaseInferer (object):
         parr = np.zeros([npull, ms.size])
         for idx in np.arange(parr.shape[0]):
             pull = fchain[np.random.randint(0, fchain.shape[0])]
+            if self.has_intrinsic_dispersion:
+                pull = pull[:-1]
             parr[idx] = self.predict ( ms, *pull )
         return np.quantile(parr, [alpha/2.,.5,1.-alpha/2.], axis=0)    
     
-    def plot_uncertainties (self, ms, ax, color='k', transparency=0.9, alpha=0.32, 
+    def plot_uncertainties (self, ms, ax=None, color='k', transparency=0.9, alpha=0.32, 
                             discard=100,xscale='linear', yscale='linear', label=None, show_std=True, lw=2, **kwargs ):
+        if ax is None:
+            ax = plt.subplot(111)
         predictions = self.estimate_y ( ms, alpha=alpha, discard=discard  )
         if xscale == 'linear':
             plot_ms = ms
