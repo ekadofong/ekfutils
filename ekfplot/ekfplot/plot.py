@@ -14,21 +14,33 @@ from . import colors as ec
 
 plt.rcParams['font.size'] = 14
 
+def convert_label_to_log ( label, single_spaced=True ):
+    unit = re.findall(r'(?<=\[).*(?=\])', label)
+    name = re.sub(r'\[.*\]', '', label).strip().strip('$')
+
+    if len(unit)>0:
+        unit = unit[0].strip().strip('$')
+
+    else:
+        unit = unit.strip().strip('$')
+    if single_spaced:
+        return r'$\log_{10}(%s/[%s])$' % (name, unit)
+    else:
+        return r'$\log_{10}\left(\frac{%s}{[%s]}\right)$' % (name, unit)
+
 common_labels = {
-    'mstar':r'M$_\bigstar$ [M$_\odot$]',                                    # \\ stellar mass
-    'mhalo':r'M$_{\rm halo}$ [M$_\odot$]',                                  # \\ halo mass
-    'm200':r'M$_{200}$ [M$_\odot$]',                                        # \\ M200c
-    'logmstar':r'$\log_{10}(\rm M_\bigstar/M_\odot)$',                      # \\ log10 of stellar mass
-    'logmhi':r'$\log_{10}(\rm M_{\rm HI}/M_\odot)$',                        # \\ log10 of HI mass
-    'logsfr':r'$\log_{10}\left(\rm SFR/[M_\odot\ {\rm yr}^{-1}]\right)$',   # \\ log10 of SFR
-    'sfr':r'SFR [$\rm M_\odot\ {\rm yr}^{-1}$]',                            # \\ SFR
+    'mstar':r'${\rm M}_\bigstar$ [${\rm M}_\odot$]',                                    # \\ stellar mass
+    'mhalo':r'${\rm M}_{\rm halo}$ [${\rm M}_\odot$]',                                  # \\ halo mass
+    'mhi':r'${\rm M}_{\rm HI}$ [${\rm M}_\odot$]',                                      # \\ HI mass
+    'm200':r'${\rm M}_{200}$ [${\rm M}_\odot$]',                                        # \\ M200c
+    'sfr':r'${\rm SFR}$ [$\rm M_\odot\ {\rm yr}^{-1}$]',                            # \\ SFR
     'specz':r'$z_{\rm spec}$',                                              # \\ spectroscopic redshift
     'photz':r'$z_{\rm phot}$',                                              # \\ photometric redshift
-    'ngal':r'N$_{\rm gal}$',                                                # \\ number of galaxies
+    'ngal':r'$\rm N_{gal}$',                                                # \\ number of galaxies
     'fhi':r'$f_{\rm HI}$',                                                  # \\ HI gas fraction
     'haew':r'$\rm EW_{\rm H\alpha}$ [$\rm \AA$]',                           # \\ Halpha EW
-    'halum':r'L$({\rm H\alpha})$ [erg s$^{-1}$]',                           # \\ Halpha luminosity
-    'fuvlum':r'L$_\nu({\rm FUV})$ [erg s$^{-1}$ Hz$^{-1}$]',                     # \\ FUV spectral luminosity
+    'halum':r'${\rm L}({\rm H\alpha})$ [erg s$^{-1}$]',                           # \\ Halpha luminosity
+    'fuvlum':r'${\rm L}_\nu({\rm FUV})$ [erg s$^{-1}$ Hz$^{-1}$]',                     # \\ FUV spectral luminosity
     'tdep':r'$t_{\rm dep}$ [Gyr]',                                          # \\ depletion time
     'logtdep':r'$\log_{10}(t_{\rm dep}/[\rm Gyr])$',                        # \\ log10 of depletion time
     'ssfr':r'sSFR [${\rm yr}^{-1}$]',                                       # \\ specific SFR
@@ -43,22 +55,20 @@ common_labels = {
                                                                             # \\ Inner ``quantile'' range
     'av':r'${\rm A}_V$',                                                          # \\ Optical extinction
 }
+    
+common_labels['logmstar'] = convert_label_to_log(common_labels['mstar'])
+common_labels['logsfr'] = convert_label_to_log(common_labels['sfr'])
+common_labels['logmhi'] = convert_label_to_log(common_labels['mhi'])
+
 
 common_units={
-    'flux':r'[erg s$^{-1}$ cm$^{-2}$]',
-    'specflux_wave':r'[erg s$^{-1}$ cm$^{-2}$ $\rm \AA^{-1}$]',
-    'specflux_freq':r'[erg s$^{-1}$ cm$^{-2}$ Hz$^{-1}$]',    
+    'flux':r'[erg s$^{-1}$ c${\rm M}^{-2}$]',
+    'specflux_wave':r'[erg s$^{-1}$ c${\rm M}^{-2}$ $\rm \AA^{-1}$]',
+    'specflux_freq':r'[erg s$^{-1}$ c${\rm M}^{-2}$ Hz$^{-1}$]',    
     'luminosity':r'[erg s$^{-1}$]',
 }
 
-def convert_label_to_log ( label, single_spaced=False ):
-    unit = re.findall('(?<=\[).*(?=\])', label)
-    name = re.sub('\[.*\]', '', label)
-    if len(unit)>0:
-        unit = unit[0]
-        return r'$\log_{10}($' + name + '/[' + unit + '])'
-    else:
-        return r'$\log_{10}($' + name + '$)$'
+
 
 def convert_label_to_pdf ( label ):
     return f'dN/d{label}'     
@@ -124,7 +134,7 @@ def hist (
     if gkde_kwargs is None:
         gkde_kwargs = {}
     
-    x = functions.fmasker(x)
+    x = sampling.fmasker(x)
     if isinstance(bins, int):
         if bintype == 'linear':
             bins = np.linspace(*np.nanquantile(x, [binalpha,1.-binalpha]), bins)
@@ -502,13 +512,13 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
     if ax is None:        
         ax = plt.subplot(111)
     
-    data_x, data_y = functions.fmasker ( data_x, data_y) 
+    data_x, data_y = sampling.fmasker ( data_x, data_y) 
 
     xlim = np.quantile(data_x, [binalpha, 1.-binalpha])
     ylim = np.quantile(data_y, [binalpha, 1.-binalpha])
     data_x[(data_x>xlim[1])|(data_x<xlim[0])] = np.NaN
     data_y[(data_y>ylim[1])|(data_y<ylim[0])] = np.NaN    
-    data_x, data_y = functions.fmasker ( data_x, data_y) 
+    data_x, data_y = sampling.fmasker ( data_x, data_y) 
     
     gkde = sampling.c_density ( data_x, data_y, return_fn=True, nmin=0 )
       
@@ -584,7 +594,7 @@ def density_scatter ( x, y, cmap='Greys', ax=None, rasterize=True, **kwargs ):
     """
     if ax is None:
         ax = plt.subplot(111)
-    fmask = functions.finite_masker ( [x, y] )
+    fmask = sampling.finite_masker ( [x, y] )
     x = x[fmask]
     y = y[fmask]
     z = sampling.c_density(x,y)
@@ -1002,9 +1012,9 @@ def histstack (
         ax = plt.subplot(111)
 
     if isinstance(xbins, int):
-        xbins = np.linspace(*np.quantile(functions.fmasker(x), [binalpha, 1.-binalpha]), num=xbins)
+        xbins = np.linspace(*np.quantile(sampling.fmasker(x), [binalpha, 1.-binalpha]), num=xbins)
     if isinstance(ybins, int):
-        ybins = np.linspace(*np.quantile(functions.fmasker(y), [binalpha, 1.-binalpha]), num=ybins)        
+        ybins = np.linspace(*np.quantile(sampling.fmasker(y), [binalpha, 1.-binalpha]), num=ybins)        
     
     assns = np.digitize ( x, xbins )
     if color_by_count:
