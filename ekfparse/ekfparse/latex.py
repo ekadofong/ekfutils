@@ -141,7 +141,11 @@ def identify_manuscript_figures ( texfile, cut_stems=False ):
     return figures
         
 def flag_unused_figures ( texfile, figdir='', move=False, **kwargs):
-    used_figures = identify_manuscript_figures ( texfile, cut_stems=True )
+    if figdir == '':
+        cut_stems = False
+    else:
+        cut_stems = True
+    used_figures = identify_manuscript_figures ( texfile, cut_stems=cut_stems )
     all_figures = glob.glob(f'{figdir}*pdf')
     unused_figures = set(all_figures) - set(used_figures)
     if move:
