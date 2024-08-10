@@ -1,5 +1,5 @@
 import numpy as np
-from scipy import optimize
+from scipy import optimize, stats
 from scipy import interpolate,integrate
 from scipy.stats import gaussian_kde, sigmaclip
 from statsmodels.stats.proportion import proportion_confint
@@ -261,7 +261,28 @@ def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quan
     emetric = efunc(resampled_metric)
     return emetric
     
+def poissonian_histcounts (r, bins=10, ci=0.68, weights=None, **kwargs):
+    alpha = (1. - ci)/2.
+
+    y_r,_ = np.histogram(
+        r,
+        bins=bins,         
+        **kwargs
+    ) 
+    upper_limit_counts = stats.poisson.ppf(1.-alpha, y_r)
+    lower_limit_counts = stats.poisson.ppf(alpha, y_r)
+    lower_limit_counts = np.where(lower_limit_counts>0, lower_limit_counts, 1)
     
+    weighted_hist,_ = np.histogram(
+        r,
+        bins=bins,  
+        weights=weights,       
+        **kwargs
+    )     
+    
+    upper_limit_weighted = weighted_hist * upper_limit_counts / y_r
+    lower_limit_weighted = weighted_hist * lower_limit_counts / y_r
+    return (lower_limit_weighted, upper_limit_weighted)    
     
 def bootstrap_histcounts(r,bins=10,npull=1000,w=None,err=0., **kwargs):    
     y_arr = np.zeros([npull, len(bins)-1])

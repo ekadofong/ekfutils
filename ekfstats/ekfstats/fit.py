@@ -521,6 +521,11 @@ class BaseInferer (object):
         self.predict = model_fn    
     
     def define_gaussianlikelihood (self, model_fn, with_intrinsic_dispersion=True ):
+        if with_intrinsic_dispersion:
+            self.has_intrinsic_dispersion = True
+        else:
+            self.has_intrinsic_dispersion = False     
+               
         def lnP ( theta, data ):
             '''
             Compute the log-likelihood of the data given the model parameters.
@@ -538,11 +543,9 @@ class BaseInferer (object):
             x, y, yerr, xerr = data
             if with_intrinsic_dispersion:
                 intr_s = theta[-1]
-                theta = theta[:-1]
-                self.has_intrinsic_dispersion = True
+                theta = theta[:-1]                
             else:
-                intr_s = 0. 
-                self.has_intrinsic_dispersion = False
+                intr_s = 0.                 
             if xerr is None:
                 xerr = 0.
                 
@@ -551,8 +554,9 @@ class BaseInferer (object):
 
             dev = (y - model) ** 2 / sigma2
             eterm = np.log(2.*np.pi*sigma2)
-            
-            return -0.5 *np.sum(  dev + eterm  )    
+             
+            return -0.5 *np.sum(  dev + eterm  ) 
+        
         return lnP
     
     def estimate_y (self, ms, alpha=0.32, npull=10000, discard=100):
