@@ -6,6 +6,7 @@ from matplotlib import transforms
 from matplotlib import patches
 from matplotlib import patheffects
 from matplotlib.colors import LogNorm
+from matplotlib.collections import LineCollection
 from scipy.integrate import quad
 from scipy import ndimage
 from astropy import units as u
@@ -156,29 +157,6 @@ def hist (
             raise ValueError(f"Orientation {orientation} not understood!")
     else:
         if (histtype=='bar')&(alpha<1.)&(lw is not None):                
-            #if 'color' not in kwargs.keys():
-            #    color = ec.ColorBase('grey')
-            #elif isinstance(kwargs['color'], ec.ColorBase):                
-            #    color = kwargs['color']
-            #    del kwargs['color']
-            #else:
-            #    color = ec.ColorBase(kwargs['color'])  
-            #    del kwargs['color']  
-            #
-            #facecolor = color.translucify(alpha).base
-            #edgecolor = color.base
-            #
-            #ax.hist (
-            #    x, 
-            #    bins, 
-            #    histtype=histtype, 
-            #    orientation=orientation, 
-            #    density=density,                 
-            #    facecolor=facecolor,
-            #    edgecolor=edgecolor,
-            #    lw=lw,
-            #    **kwargs
-            #) 
             _,_,im = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, **kwargs) 
             if ('color' not in kwargs.keys()) and ('edgecolor' not in kwargs.keys()) and ('ec' not in kwargs.keys()):
                 color = im.patches[0].get_facecolor()
@@ -209,8 +187,42 @@ def hist (
     if bintype == 'log':
         ax.set_xscale('log')
     return ax, imhist# bins
-        
+
+def colormapped_hist ( data, ax=None, bins=10, cmap=None):
+    if ax is None:
+        ax = plt.subplot(111)
+    if cmap is None:
+        cmap = plt.cm.viridis
+    counts,_ = np.histogram(data, bins=bins)
+    barlist = ax.bar(sampling.midpts(bins),counts, width=np.diff(bins), )
+    midpts = sampling.midpts(bins)
+    for idx,bar in enumerate(barlist):
+        bar.set_color(cmap((midpts[idx]-midpts[0])/midpts[-1]))       
+    return barlist, ax
+
+def gradient_plot ( x, y, c, cmap=None, ax=None, lw=3, **kwargs):
+    if ax is None:
+        ax = plt.subplot(111)
+    if cmap is None:
+        cmap = plt.cm.viridis
+    points = np.array([x, y]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
     
+    lc = LineCollection(
+        segments, 
+        cmap=cmap, 
+        norm=plt.Normalize(*np.nanquantile(c,[0.,1.])),
+        **kwargs
+    )
+    
+    lc.set_array(c)
+    lc.set_linewidth(lw)    
+    
+    ax.add_collection(lc)
+    ax.set_xlim(*np.nanquantile(x,[0.,1.]))
+    ax.set_ylim(*np.nanquantile(y,[0.,1.]))
+    return lc, ax
+        
 def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., qlow=None, qhigh=None, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)   
