@@ -7,6 +7,7 @@ from astropy.modeling.fitting import LevMarLSQFitter
 import emcee
 
 from . import functions as ef
+from . import sampling 
 
 
 class LFitter ( object ):
@@ -275,7 +276,7 @@ class LFitter ( object ):
         fig, axarr = plt.subplots(self.sampler.ndim, 1, figsize=(10,fsize*self.sampler.ndim))
         for aindex, ax in enumerate(axarr):
             for windex in range(self.sampler.nwalkers):
-                ax.plot ( chain[:, windex, aindex], color='lightgrey', alpha=0.3)    
+                ax.plot ( chain[:, windex, aindex], color='k', alpha=0.01)    
     
     
 class FlexFitter ( LFitter ):
@@ -441,6 +442,16 @@ class BaseInferer (object):
         else:
             self.ndim = len(bounds)
         self.bounds = bounds    
+        
+    def chain_convergence_statistics (self, fdiscard=0.2):
+        chain = self.sampler.get_chain ()
+        ndiscard = int(chain.shape[0]*fdiscard)
+        chain = chain[ndiscard:]
+        gr_stats = np.zeros(chain.shape[2])
+        for idx in range(chain.shape[2]):
+            gr_stats[idx] = sampling.gelmanrubin(chain[:,:,idx])
+        
+        return gr_stats
     
     def set_loglikelihood ( self, likelihood_fn ):
         self.loglikelihood = likelihood_fn
@@ -520,7 +531,7 @@ class BaseInferer (object):
     def set_predict ( self, model_fn ):
         self.predict = model_fn    
     
-    def define_gaussianlikelihood (self, model_fn, with_intrinsic_dispersion=True ):
+    def define_gaussianlikelihood (self, model_fn, with_intrinsic_dispersion=True, remove_nan=True ):
         if with_intrinsic_dispersion:
             self.has_intrinsic_dispersion = True
         else:
@@ -554,8 +565,10 @@ class BaseInferer (object):
 
             dev = (y - model) ** 2 / sigma2
             eterm = np.log(2.*np.pi*sigma2)
-             
-            return -0.5 *np.sum(  dev + eterm  ) 
+            if remove_nan:
+                return -0.5 * np.nansum(  dev + eterm  ) 
+            else:
+                return -0.5 * np.sum(  dev + eterm  ) 
         
         return lnP
     
