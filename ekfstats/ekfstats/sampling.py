@@ -284,18 +284,18 @@ def poissonian_histcounts (r, bins=10, ci=0.68, weights=None, **kwargs):
     lower_limit_weighted = weighted_hist * lower_limit_counts / y_r
     return (lower_limit_weighted, upper_limit_weighted)    
     
-def bootstrap_histcounts(r,bins=10,npull=1000,w=None,err=0., **kwargs):    
+def bootstrap_histcounts(r,bins=10,npull=1000,weights=None,err=0., **kwargs):    
     y_arr = np.zeros([npull, len(bins)-1])
     for idx in range(npull):
-        resample = np.random.choice(np.arange(len(r)),len(r))
-        if w is None:
-            weights = None
+        resample = np.random.choice(np.arange(len(r)),len(r), replace=True)
+        if weights is None:
+            _weights = None
         else:
-            weights = w[resample]
+            _weights = weights[resample]
         y_r,_ = np.histogram(
             np.random.normal(r,err)[resample],
             bins=bins, 
-            weights=weights,
+            weights=_weights,
             **kwargs
         ) 
         y_arr[idx] = y_r
