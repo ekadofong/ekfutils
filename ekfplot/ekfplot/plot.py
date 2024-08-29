@@ -403,15 +403,15 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
     
     if xerr is None:
         if xlow is None:
-            xlow = np.NaN
+            xlow = np.nan
         if xhigh is None:
-            xhigh = np.NaN
+            xhigh = np.nan
         xerr =  np.array([[x-xlow],[xhigh - x]]).reshape(2,-1) * xsigma
     if yerr is None:
         if ylow is None:
-            ylow = np.NaN
+            ylow = np.nan
         if yhigh is None:
-            yhigh = np.NaN            
+            yhigh = np.nan            
         yerr =  np.array([[y-ylow],[yhigh - y]]).reshape(2,-1) * ysigma
     
     if np.isnan(xerr).all():
@@ -528,8 +528,8 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
 
     xlim = np.quantile(data_x, [binalpha, 1.-binalpha])
     ylim = np.quantile(data_y, [binalpha, 1.-binalpha])
-    data_x[(data_x>xlim[1])|(data_x<xlim[0])] = np.NaN
-    data_y[(data_y>ylim[1])|(data_y<ylim[0])] = np.NaN    
+    data_x[(data_x>xlim[1])|(data_x<xlim[0])] = np.nan
+    data_y[(data_y>ylim[1])|(data_y<ylim[0])] = np.nan    
     data_x, data_y = sampling.fmasker ( data_x, data_y) 
     
     gkde = sampling.c_density ( data_x, data_y, return_fn=True, nmin=0 )
@@ -1155,3 +1155,8 @@ def violinplot ( distributions, ax=None, clist=None, labels=None, **kwargs ):
         ax.set_xticklabels(labels)
     
     return parts, ax
+
+
+def celestial_plot ( x, y, ax, **kwargs ):
+    im = ax.plot(x,y, transform=ax.get_transform('fk5'), **kwargs)
+    return im, ax
