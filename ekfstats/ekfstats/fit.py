@@ -576,6 +576,8 @@ class BaseInferer (object):
         """
         Get upper and lower bound estimates [16th/84th] in the prediction space
         """
+        if isinstance(ms, float):
+            ms = np.array(ms)
         #ax.plot ( ms, ms*pout[0] + pout[1], color=colors_d[source].modulate(0.4,0.).base, zorder=0 )
         fchain = self.sampler.get_chain(flat=True, discard=discard)
         parr = np.zeros([npull, ms.size])
@@ -587,21 +589,28 @@ class BaseInferer (object):
         return np.quantile(parr, [alpha/2.,.5,1.-alpha/2.], axis=0)    
     
     def plot_uncertainties (self, ms, ax=None, color='k', transparency=0.9, alpha=0.32, 
-                            discard=100,xscale='linear', yscale='linear', label=None, show_std=True, lw=2, **kwargs ):
+                            discard=100,xscale='linear', yscale='linear', label=None, show_std=True, lw=2, show_median=True, **kwargs ):
         if ax is None:
             ax = plt.subplot(111)
+        
         predictions = self.estimate_y ( ms, alpha=alpha, discard=discard  )
         if xscale == 'linear':
             plot_ms = ms
         elif xscale == 'log':
             plot_ms = 10.**ms
         if yscale=='linear':
-            ax.plot(plot_ms, predictions[1],color=color, label=label, **kwargs)
+            if show_median:
+                ax.plot(plot_ms, predictions[1],color=color, label=label, **kwargs)
             ax.fill_between(plot_ms, predictions[0], predictions[2], alpha=1.-transparency, color=color, **kwargs)
         elif yscale=='log':
-            ax.plot(plot_ms, 10.**predictions[1],color=color, label=label, lw=lw, **kwargs)
+            if show_median:
+                ax.plot(plot_ms, 10.**predictions[1],color=color, label=label, lw=lw, **kwargs)
             ax.fill_between(plot_ms, 10.**predictions[0], 10.**predictions[2], alpha=1.-transparency, color=color, **kwargs)    
-                   
+        
+        if self.has_intrinsic_dispersion and show_std:
+            intdisp = self.get_param_estimates ()[1,-1]
+            for sign in [-1.,1.]:
+                ax.plot(plot_ms, predictions[1] + sign*intdisp,color=color, **kwargs)
         return ax    
 
 def plawparams_from_pts (xs, ys):
