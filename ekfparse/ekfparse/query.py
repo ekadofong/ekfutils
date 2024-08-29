@@ -3,6 +3,7 @@ import os
 import glob
 import logging
 import urllib
+import requests
 from xml.etree import ElementTree as ET
 import numpy as np
 from astropy.io import fits
@@ -407,3 +408,28 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
                 print(f'...removed {fname}')               
     
     return output
+
+
+def get_legacysurveyimage ( ra, dec, width=100, height=100, pixscale=0.13, layer='ls-dr9', format='fits', savedir='./', savename=None, verbose=True ):
+    if hasattr(ra, 'unit'):
+        ra = ra.to(u.deg).value
+    if hasattr(dec, 'unit'):
+        dec = dec.to(u.deg).value
+    #url = f"https://www.legacysurvey.org/viewer/cutout.jpg?ra=36.1247&dec=-6.1085&layer=ls-dr9&pixscale=1&width=300&height=300"
+    url = f"https://www.legacysurvey.org/viewer/cutout.{format}?ra={ra}&dec={dec}&layer={layer}&pixscale={pixscale}&width={width}&height={height}"
+    
+    # Send a GET request to the URL
+    response = requests.get(url)
+
+    # Write the content of the response to a file
+    if savename is None:
+        savename=f'cutout'
+    file_name = f"{savedir}{savename}.{format}"        
+    if verbose:
+        print(f'''Saving:
+{url}
+to {file_name}''')
+    with open(file_name, 'wb') as file:
+        file.write(response.content)
+        
+    
