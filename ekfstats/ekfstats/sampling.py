@@ -32,6 +32,17 @@ def fmasker ( *args ):
     '''
     return finite_masker(args, inplace=True)
 
+def resample ( x_l, npull=500 ):
+    if not isinstance(x_l, list):
+        x_l = [x_l]
+        
+    arr = np.zeros([npull, len(x_l), len(x_l[0])])
+    for idx in range(npull):
+        indices = np.random.randint(0, len(x_l[0]), size=len(x_l[0]) )
+        for jdx in range(len(x_l)):
+            arr[idx, jdx] = x_l[jdx][indices]
+    return arr
+
 def c_density ( x, y, return_fn=False, clean=True, nmax=None, nmin=30, **kwargs ):
     '''
     Compute gKDE density based on sample
