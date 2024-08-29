@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ekfobs"
+version = "0.0.1"
+description = "handy dandy observation utils"
+authors = [
+    { name = "Erin Kado-Fong" }
+]
+dependencies = []  # Add your dependencies here if any
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*"]  # Optional: exclude tests or any other directories
