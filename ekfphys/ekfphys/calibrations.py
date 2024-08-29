@@ -47,6 +47,14 @@ def LHa_from_EW ( EW, Mr, z=0., balmer_dec=2.86, ew_c=2.5, ):
     ha_lum = prefactor * (EW+ew_c) / wv_ha**2 * 10.**( (Mr - 34.1)/-2.5 ) * ( balmer_dec / 2.86 ) ** 2.36
     return ha_lum
 
+def EWfromLHa(LHa, Mr, z=0., balmer_dec=2.86, ew_c=2.5, ):
+    wv_ha = 6565.*(1.+z)
+    prefactor = 3e25 * u.erg/u.s
+    phot_factor = 10.**( (Mr - 34.1)/-2.5 ) * ( balmer_dec / 2.86 ) ** 2.36
+    combined_ew = LHa / prefactor  * wv_ha**2  / phot_factor   
+    haew = combined_ew - ew_c
+    return haew
+
 def LNUV2SFR_IP ( lnuv ):
     '''
     Following Eq. 3 of Iglesias-Paramo 2006, corrected for Kroupa IMF
