@@ -43,6 +43,19 @@ def resample ( x_l, npull=500 ):
             arr[idx, jdx] = x_l[jdx][indices]
     return arr
 
+def estimate_y ( xs,fn, args, u_args=None, npull=1000):
+    ys = np.zeros([npull, xs.size])
+    if u_args is None:
+        assert len(args.shape) == 2
+        
+    for _ in range(npull):
+        if u_args is not None:
+            apull = np.random.normal(args, u_args)
+        else:
+            apull = args[np.random.randint(0, args.shape[0])]
+        ys[_] = fn(xs, *apull)
+    return ys
+
 def c_density ( x, y, return_fn=False, clean=True, nmax=None, nmin=30, **kwargs ):
     '''
     Compute gKDE density based on sample
