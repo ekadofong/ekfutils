@@ -48,7 +48,8 @@ def _find_bo_star_gaia (skycoord, maglim=16., nreturn=1, pmlim=None, radius=None
 
     low_pm = (gaia_objs['pmra']<pmlim)&(gaia_objs['pmdec']<pmlim)
     is_bright = gaia_objs['phot_g_mean_mag']<maglim
-    offset_stars = gaia_objs[low_pm&is_bright].to_pandas ().sort_values('dist')
+    is_not_same_object = gaia_objs['dist'] > (2.*u.arcsec).to(u.deg).value
+    offset_stars = gaia_objs[low_pm&is_bright&is_not_same_object].to_pandas ().sort_values('dist')
     offset_stars = offset_stars.rename({'dist':'distance'}, axis=1)    
 
     if len(offset_stars) == 0:
