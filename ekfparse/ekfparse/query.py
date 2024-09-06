@@ -432,4 +432,39 @@ to {file_name}''')
     with open(file_name, 'wb') as file:
         file.write(response.content)
         
+def load_gamacatalogs (gama_dir=None):
+    '''
+    Just load in GAMA DR4 SpecObj + LAMBDAR stellar masses 
+    '''
+    if gama_dir is None:
+        gama_dir = '/Users/kadofong/work/projects/gama/'
+    gama = table.Table(fits.getdata(f'{gama_dir}local_data/SpecObjv27.fits', 1)).to_pandas().set_index("CATAID")
+    gama_masses = table.Table(fits.getdata(f'{gama_dir}local_data/StellarMassesLambdarv24.fits', 1)).to_pandas().set_index("CATAID")
+
+    catalog = gama.join(gama_masses[['logmstar','dellogmstar']])
+    return catalog
+
+def match_catalogs (
+        catA, 
+        catB, 
+        radius=3.*u.arcsec,
+        coordkeysA = ['RA','DEC'],
+        coordkeysB = ['RA','DEC']
+    ):
+    catA_coords = coordinates.SkyCoord(
+        catA[coordkeysA[0]].values,
+        catA[coordkeysA[1]].values,
+        unit='deg'
+    )
+    catB_coords = coordinates.SkyCoord(
+        catB[coordkeysB[0]].values,
+        catB[coordkeysB[1]].values,
+        unit='deg'
+    )
     
+    catB_correspondence, d2d, _ = catA_coords.match_to_catalog_sky(catB_coords)
+    is_match = d2d < (4.*u.arcsec)
+    catB_matching_index = catB.index[catB_correspondence[is_match]]
+    catA_matching_index = catA.index[np.arange(len(catA_coords), dtype=int)[is_match]]
+    
+    return catA.reindex(catA_matching_index), catB.reindex(catB_matching_index)
