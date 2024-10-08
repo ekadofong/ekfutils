@@ -464,6 +464,7 @@ class BaseInferer (object):
         lnP += self.logprior ( theta )
         if not np.isfinite(lnP):
             return -np.inf
+        
         lnP += self.loglikelihood ( theta, data )
         return lnP    
     
@@ -475,6 +476,8 @@ class BaseInferer (object):
             if hasattr ( self, 'bounds' ):
                 initial = [ np.random.uniform(self.bounds[idx][0],self.bounds[idx][1], nwalkers) for idx in range(len(self.bounds))]
                 initial = np.array(initial).T
+            else:
+                raise ValueError("No initial walker positions or bounds provided!")
         
         if not hasattr(self,'ndim'):
             self.ndim = np.shape(initial)[1]
@@ -508,6 +511,8 @@ class BaseInferer (object):
         """        
         assert hasattr(self, 'predict'), "No prediction function stored!"
         args = self.get_param_estimates ()[1]
+        if self.has_intrinsic_dispersion:
+            args = args[:-1]
         prediction = self.predict ( x, *args )
         return prediction    
         
@@ -529,6 +534,10 @@ class BaseInferer (object):
         return fig, axarr    
     
     def set_predict ( self, model_fn ):
+        '''
+        Set predict function, of form:
+        self.predict ( data, *parameters )
+        '''
         self.predict = model_fn    
     
     def define_gaussianlikelihood (self, model_fn, with_intrinsic_dispersion=True, remove_nan=True ):
@@ -559,7 +568,8 @@ class BaseInferer (object):
                 intr_s = 0.                 
             if xerr is None:
                 xerr = 0.
-                
+            
+            
             model = model_fn(x,*theta)
             sigma2 = yerr**2 + intr_s**2 + xerr**2 # \\ XXX Check that this is right!!
 
@@ -740,3 +750,8 @@ def partial_covariance(x, y, z):
     # Calculate and return the covariance matrix of the residuals
     pcov = np.cov(resid_x, resid_y)
     return pcov
+
+
+def normalize ( y, x=None, kind='max'):
+    if kind == 'max':
+        return y/np.nanmax(y)
