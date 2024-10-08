@@ -101,7 +101,7 @@ def adjust_font ( ax, fontsize=15 ):
     for item in items:
         item.set_fontsize(fontsize)
 
-def set_framecolor ( color, ax=None, labelcolor=None ):
+def set_framecolor ( color, ax=None, labelcolor=None, ):
     '''
     Sets subplot color. TODO : only accepts mpl_named_color or hex. Need to catch errors or convert
     '''
@@ -113,6 +113,11 @@ def set_framecolor ( color, ax=None, labelcolor=None ):
     ax.tick_params(color=color, labelcolor=labelcolor)
     for spine in ax.spines.values():
         spine.set_edgecolor(color) 
+    ax.tick_params(axis='x', which='minor', colors=color)
+    ax.tick_params(axis='y', which='minor', colors=color)
+        
+    ax.xaxis.label.set_color(color)
+    ax.yaxis.label.set_color(color)
         
 def hist (
         x, 
@@ -222,7 +227,8 @@ def gradient_plot ( x, y, c, cmap=None, ax=None, lw=3, **kwargs):
     ax.set_xlim(*np.nanquantile(x,[0.,1.]))
     ax.set_ylim(*np.nanquantile(y,[0.,1.]))
     return lc, ax
-        
+
+
 def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., qlow=None, qhigh=None, **kwargs ):
     if ax is None:
         ax = plt.subplot(111)   
