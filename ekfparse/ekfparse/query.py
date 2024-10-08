@@ -440,8 +440,10 @@ def load_gamacatalogs (gama_dir=None):
         gama_dir = '/Users/kadofong/work/projects/gama/'
     gama = table.Table(fits.getdata(f'{gama_dir}local_data/SpecObjv27.fits', 1)).to_pandas().set_index("CATAID")
     gama_masses = table.Table(fits.getdata(f'{gama_dir}local_data/StellarMassesLambdarv24.fits', 1)).to_pandas().set_index("CATAID")
+    gama_lines = table.Table(fits.getdata(f'{gama_dir}local_data/GaussFitComplexv05.fits', 1)).to_pandas().set_index("CATAID")
+    gama_lines = gama_lines.loc[~gama_lines.index.duplicated()]
 
-    catalog = gama.join(gama_masses[['logmstar','dellogmstar']])
+    catalog = gama.join(gama_masses[['logmstar','dellogmstar']]).join(gama_lines[['HA_EW','HA_EW_ERR','HB_EW','HB_EW_ERR']])
     return catalog
 
 def match_catalogs (
