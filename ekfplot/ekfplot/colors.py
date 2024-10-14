@@ -39,6 +39,11 @@ class ColorBase ( object ):
         else:
             raise KeyError (f'Color system {system} not understood!')
         
+    def set_alpha ( self, alpha ):
+        base = self.base
+        base[-1] = alpha
+        self.base = base
+        
     @property
     def rgba_base ( self ):
         return self.base
