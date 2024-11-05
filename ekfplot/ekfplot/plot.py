@@ -205,7 +205,7 @@ def colormapped_hist ( data, ax=None, bins=10, cmap=None):
         bar.set_color(cmap((midpts[idx]-midpts[0])/midpts[-1]))       
     return barlist, ax
 
-def gradient_plot ( x, y, c, cmap=None, ax=None, lw=3, **kwargs):
+def gradient_plot ( x, y, c, cmap=None, ax=None, lw=3, vmin=None, vmax=None, outline_color=None, differential_outline_thickness=1., **kwargs):
     if ax is None:
         ax = plt.subplot(111)
     if cmap is None:
@@ -213,19 +213,25 @@ def gradient_plot ( x, y, c, cmap=None, ax=None, lw=3, **kwargs):
     points = np.array([x, y]).T.reshape(-1, 1, 2)
     segments = np.concatenate([points[:-1], points[1:]], axis=1)
     
+    if vmin is None:
+        vmin = np.nanquantile(c,0.)
+    if vmax is None:
+        vmax = np.nanquantile(c,1.)
     lc = LineCollection(
         segments, 
         cmap=cmap, 
-        norm=plt.Normalize(*np.nanquantile(c,[0.,1.])),
+        norm=plt.Normalize(vmin, vmax),
         **kwargs
     )
     
     lc.set_array(c)
     lc.set_linewidth(lw)    
     
+    if outline_color is not None:
+        ax.plot ( x, y, lw=lw+differential_outline_thickness, color=outline_color)
     ax.add_collection(lc)
-    ax.set_xlim(*np.nanquantile(x,[0.,1.]))
-    ax.set_ylim(*np.nanquantile(y,[0.,1.]))
+    #ax.set_xlim(*np.nanquantile(x,[0.,1.]))
+    #ax.set_ylim(*np.nanquantile(y,[0.,1.]))
     return lc, ax
 
 
