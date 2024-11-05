@@ -6,6 +6,8 @@ import urllib
 import requests
 from xml.etree import ElementTree as ET
 import numpy as np
+
+import pandas as pd
 from astropy.io import fits
 from astropy import wcs
 from astropy import coordinates
@@ -445,6 +447,56 @@ def load_gamacatalogs (gama_dir=None):
 
     catalog = gama.join(gama_masses[['logmstar','dellogmstar']]).join(gama_lines[['HA_EW','HA_EW_ERR','HB_EW','HB_EW_ERR']])
     return catalog
+
+def load_sdsscatalogs (sdss_dir=None, zmax=0.05):
+    if sdss_dir is None:
+        sdss_dir = '/Users/kadofong/work/projects/sdss/'
+    
+    sdss = fits.open(f'{sdss_dir}/local_data/specObj-dr17.fits')
+    is_lowz = (sdss[1].data['Z']>0.001)&(sdss[1].data['Z']<zmax)
+    cat = np.array([
+        sdss[1].data['PLUG_RA'][is_lowz],
+        sdss[1].data['PLUG_DEC'][is_lowz],
+        sdss[1].data['Z'][is_lowz],
+    ])
+    cat = pd.DataFrame(cat.T, index=sdss[1].data['SPECOBJID'][is_lowz], columns=['RA','DEC','Z'])
+    for key in ['SURVEY','RUN2D','PLATE','MJD','FIBERID']:
+        cat[key.lower()] = sdss[1].data[key][is_lowz].byteswap().newbyteorder()
+    
+    return cat
+
+def download_sdss_spectrum ( row=None, run2d=None, plate=None, mjd=None, fiberid=None, savedir='./sdss_spectra/'):
+    if (row is None) and (run2d is None):
+        raise ValueError ("Must specify row OR spectrum details")
+    elif row is not None:
+        run_version = row['run2d']
+        plate = row['plate']
+        mjd = row['mjd']
+        fiber = row['fiberid']
+    
+    # https://data.sdss.org/sas/dr18/spectro/sdss/redux/26/spectra/
+    zfill_plate = str(plate).zfill(4)
+    zfill_fiber = str(fiber).zfill(4)
+    run_version = run_version.strip()
+    # spec-0385-51783-0007.fits
+    specname = f'spec-{zfill_plate}-{mjd}-{zfill_fiber}.fits'
+    if 'v' in row['run2d']:
+        extra = 'full/'
+    else:
+        extra = ''
+    spectrum_url = f'https://data.sdss.org/sas/dr18/spectro/sdss/redux/{run_version}/spectra/{extra}{zfill_plate}/{specname}'
+
+    # Send a GET request to the URL
+    response = requests.get(spectrum_url)
+    
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+        
+    file_name = f'{savedir}/{specname}'
+    with open(file_name, 'wb') as file:
+        file.write(response.content)
+        
+    return fits.open(file_name)
 
 def match_catalogs (
         catA, 
