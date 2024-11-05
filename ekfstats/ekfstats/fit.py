@@ -755,3 +755,12 @@ def partial_covariance(x, y, z):
 def normalize ( y, x=None, kind='max'):
     if kind == 'max':
         return y/np.nanmax(y)
+
+def quickfit ( predict_fn, x, y, bounds=None ):
+    fitter = BaseInferer ()
+    fitter.set_predict(predict_fn)
+    fitter.set_loglikelihood(fitter.define_gaussianlikelihood(fitter.predict,False))
+    fitter.set_bounds(bounds)
+    fitter.set_uniformprior(fitter.bounds)
+    fitter.run((x,y,0.01*y, None), )
+    return fitter
