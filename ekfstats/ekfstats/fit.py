@@ -756,11 +756,14 @@ def normalize ( y, x=None, kind='max'):
     if kind == 'max':
         return y/np.nanmax(y)
 
-def quickfit ( predict_fn, x, y, bounds=None ):
+def quickfit ( predict_fn, x, y, u_y=None, bounds=None ):
+    if u_y is None:
+        u_y = 0.01*y
+        
     fitter = BaseInferer ()
     fitter.set_predict(predict_fn)
     fitter.set_loglikelihood(fitter.define_gaussianlikelihood(fitter.predict,False))
     fitter.set_bounds(bounds)
     fitter.set_uniformprior(fitter.bounds)
-    fitter.run((x,y,0.01*y, None), )
+    fitter.run((x,y,u_y, None), )
     return fitter
