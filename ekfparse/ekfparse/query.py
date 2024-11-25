@@ -444,13 +444,20 @@ def load_gamacatalogs (gama_dir=None):
     gama_masses = table.Table(fits.getdata(f'{gama_dir}local_data/StellarMassesLambdarv24.fits', 1)).to_pandas().set_index("CATAID")
     gama_lines = table.Table(fits.getdata(f'{gama_dir}local_data/GaussFitComplexv05.fits', 1)).to_pandas().set_index("CATAID")
     gama_lines = gama_lines.loc[~gama_lines.index.duplicated()]
+    gama_phot = table.Table(fits.getdata(f'{gama_dir}local_data/LambdarCatv01.fits', 1)).to_pandas().set_index("CATAID")
+    gama_phot = gama_phot.loc[~gama_phot.index.duplicated()]
+    gama_phot['r_mag'] = -2.5*np.log10(gama_phot['r_flux']/3631.)
 
-    catalog = gama.join(gama_masses[['logmstar','dellogmstar']]).join(gama_lines[['HA_EW','HA_EW_ERR','HB_EW','HB_EW_ERR']])
+    catalog = gama.join(gama_masses[['logmstar','dellogmstar','absmag_g','absmag_r']]).join(gama_lines[['HA_EW','HA_EW_ERR','HB_EW','HB_EW_ERR']]).join(gama_phot[['r_mag']])
     return catalog
 
-def load_sdsscatalogs (sdss_dir=None, zmax=0.05):
+def load_sdsscatalogs (sdss_dir=None, zmax=0.05, use_scratch=True):
     if sdss_dir is None:
         sdss_dir = '/Users/kadofong/work/projects/sdss/'
+    sname = f'{sdss_dir}/local_data/scratch_sdss.csv'
+    if use_scratch and os.path.exists(sname):
+        cat = pd.read_csv(sname)
+        return cat
     
     sdss = fits.open(f'{sdss_dir}/local_data/specObj-dr17.fits')
     is_lowz = (sdss[1].data['Z']>0.001)&(sdss[1].data['Z']<zmax)
