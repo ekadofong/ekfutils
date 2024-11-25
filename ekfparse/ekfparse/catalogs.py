@@ -63,4 +63,14 @@ def read_mnras_table ( filename ):
         raise ValueError    
     
     df = pd.DataFrame(body, columns=colnames)
+    for col in df.columns:
+        is_all_integers = df[col].apply(lambda x: x.isdigit()).all()
+        if is_all_integers:
+            df[col] = df[col].astype(int)
+        try:
+            df[col] = df[col].astype(float)
+        except ValueError:
+            pass
+        
+            
     return df
