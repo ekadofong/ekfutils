@@ -139,30 +139,64 @@ def flambda_to_fnu ( wv, flux ):
     eunit = flux.unit * wv.unit
     return (wv**2/co.c * flux).to(eunit/u.Hz)
 
-def fnu_to_flambda ( freq, flux ):
+def fnu_to_flambda ( wvorfreq, flux ):
     '''
     lam F_lam = nu F_nu 
     F_lam = nu / lam F_nu 
           = nu^2 / c F_nu
     '''    
-    if not hasattr ( freq, 'unit' ) or not hasattr ( flux, 'unit' ):
+    if not hasattr ( wvorfreq, 'unit' ) or not hasattr ( flux, 'unit' ):
         raise TypeError ("Must supply astropy Quantities!") 
+    if wvorfreq.unit.is_equivalent(u.m):
+        freq = co.c/wvorfreq
+    else:
+        freq = wvorfreq
+            
     eunit = flux.unit * freq.unit
     return (freq**2 / co.c * flux).to(eunit/u.AA)
-def photometry_from_spectrum ( wv, flux, wv_filter=None, trans_filter=None, filter_file=None  ):
+
+def photometry_from_spectrum ( wv, flux, wv_filter=None, trans_filter=None, filter_file=None, trans_type='photon'  ):
     if filter_file is not None:
         transmission = np.genfromtxt ( filter_file )
         wv_filter = transmission[:,0]*u.AA
-        trans_filter = transmission[:,1]    
+        trans_filter = transmission[:,1]  
+            
+    if flux.unit.is_equivalent(u.erg/u.s/u.cm**2/u.AA):
+        flux = flambda_to_fnu(wv, flux)
+        #pass
+    elif flux.unit.is_equivalent(u.erg/u.s/u.cm**2/u.Hz):
+        #flux = fnu_to_flambda(wv, flux)
+        pass
+    else:
+        raise ValueError ('Flux units not dimensionally correct!')
+    
+    # \\ filter transmission needs to be monotonically increasing in wavelength
+    wsort = np.argsort(wv_filter)
+    wv_filter = wv_filter[wsort]
+    trans_filter = trans_filter[wsort]
         
+    wmask = (wv>=wv_filter.min())&(wv<=wv_filter.max())
+    wv = wv[wmask]
+    flux = flux[wmask]
     freq = (co.c/wv).to(u.Hz)
-    #filter_flux = np.trapz ( (bb(wl)*transmission[:,1])[::-1]/freq[::-1], freq[::-1] )
     
-    filter_interpolated = np.interp(wv.value, wv_filter.to(wv.unit).value, trans_filter)[::-1] 
+    filter_interpolated = np.interp(wv.value, wv_filter.to(wv.unit).value, trans_filter)
+
+    #filter_interpolated = filter_interpolated/freq**2 # account for nu T(nu) = lambda T(lambda)
     
-    band_flux = np.trapz ( flux*filter_interpolated/freq[::-1], freq[::-1] )
-    normalization = np.trapz ( filter_interpolated/freq[::-1], freq[::-1] )
-    return band_flux/normalization
+    if trans_type == 'photon':
+        
+        
+        band_flux = np.trapz ( flux*filter_interpolated/freq, freq )
+        normalization = np.trapz ( filter_interpolated/freq, freq )
+        #band_flux = np.trapz(flux*filter_interpolated*wv, wv)
+        #normalization = np.trapz(filter_interpolated*wv, wv)
+    elif trans_type == 'energy':
+        band_flux = np.trapz ( flux*filter_interpolated, freq )
+        normalization = np.trapz ( filter_interpolated, freq )
+        #band_flux = np.trapz(flux*filter_interpolated, wv)
+        #normalization = np.trapz(filter_interpolated, wv)        
+    return band_flux/normalization  
 
 
 class SolarReference ():
