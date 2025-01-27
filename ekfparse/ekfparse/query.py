@@ -442,13 +442,22 @@ def load_gamacatalogs (gama_dir=None):
         gama_dir = '/Users/kadofong/work/projects/gama/'
     gama = table.Table(fits.getdata(f'{gama_dir}local_data/SpecObjv27.fits', 1)).to_pandas().set_index("CATAID")
     gama_masses = table.Table(fits.getdata(f'{gama_dir}local_data/StellarMassesLambdarv24.fits', 1)).to_pandas().set_index("CATAID")
-    gama_lines = table.Table(fits.getdata(f'{gama_dir}local_data/GaussFitComplexv05.fits', 1)).to_pandas().set_index("CATAID")
-    gama_lines = gama_lines.loc[~gama_lines.index.duplicated()]
-    gama_phot = table.Table(fits.getdata(f'{gama_dir}local_data/LambdarCatv01.fits', 1)).to_pandas().set_index("CATAID")
+    gama_lines = table.Table(fits.getdata(f'{gama_dir}local_data/GaussFitComplexv05.fits', 1)).to_pandas()#.set_index("CATAID")
+    #gama_lines = gama_lines.loc[~gama_lines.index.duplicated()]
+    gama_phot = table.Table(fits.getdata(f'{gama_dir}local_data/ApMatchedCatv06.fits', 1)).to_pandas().set_index("CATAID")
     gama_phot = gama_phot.loc[~gama_phot.index.duplicated()]
-    gama_phot['r_mag'] = -2.5*np.log10(gama_phot['r_flux']/3631.)
+    gama_phot['r_mag'] = gama_phot['MAG_PETRO_r'] #-2.5*np.log10(gama_phot['r_flux']/3631.)
+    for band in 'griz':
+        gama_phot[f'{band}_flux'] = 10.**(gama_phot[f'MAG_PETRO_{band}']/-2.5) * 3631*1e9
 
-    catalog = gama.join(gama_masses[['logmstar','dellogmstar','absmag_g','absmag_r']]).join(gama_lines[['HA_EW','HA_EW_ERR','HB_EW','HB_EW_ERR']]).join(gama_phot[['r_mag']])
+    catalog = gama.join(gama_masses[['logmstar','dellogmstar','absmag_g','absmag_r']])\
+        .reset_index().merge(gama_lines[['SPECID',
+                           'HA_FLUX','HA_FLUX_ERR','HA_EW','HA_EW_ERR',
+                           'HB_EW','HB_EW_ERR',
+                           'NIIB_FLUX','NIIB_FLUX_ERR',
+                           'NIIR_FLUX','NIIR_FLUX_ERR',
+                           ]], on='SPECID').set_index('CATAID')\
+            .join(gama_phot[['g_flux','r_flux','i_flux','r_mag']])
     return catalog
 
 def load_sdsscatalogs (sdss_dir=None, zmax=0.05, use_scratch=True):
