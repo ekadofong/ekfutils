@@ -116,7 +116,7 @@ def colormap_from_list ( clist, style='continuous' ):
         
     if style == 'continuous':
         cmap = mpc.LinearSegmentedColormap.from_list ( 'continuous_sequential', clist )
-    elif style == 'quantized':
+    elif style == 'discrete':
         cmap = mpc.ListedColormap(clist )
         
     return cmap

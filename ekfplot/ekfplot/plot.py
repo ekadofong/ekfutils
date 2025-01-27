@@ -40,7 +40,7 @@ common_labels = {
     'ngal':r'$\rm N_{gal}$',                                                # \\ number of galaxies
     'fhi':r'$f_{\rm HI}$',                                                  # \\ HI gas fraction
     'haew':r'$\rm EW_{\rm H\alpha}$ [$\rm \AA$]',                           # \\ Halpha EW
-    'halum':r'${\rm L}({\rm H\alpha})$ [erg s$^{-1}$]',                           # \\ Halpha luminosity
+    'halum':r'${\rm L}({\rm H\alpha})$ [$\rm erg\ s^{-1}$]',                           # \\ Halpha luminosity
     'fuvlum':r'${\rm L}_\nu({\rm FUV})$ [erg s$^{-1}$ Hz$^{-1}$]',                     # \\ FUV spectral luminosity
     'tdep':r'$t_{\rm dep}$ [Gyr]',                                          # \\ depletion time
     'logtdep':r'$\log_{10}(t_{\rm dep}/[\rm Gyr])$',                        # \\ log10 of depletion time
@@ -79,6 +79,7 @@ def loglog (ax=None):
         ax = plt.subplot(111)
     ax.set_xscale('log')
     ax.set_yscale('log')
+
 
 def set_formatting ():
     plt.rcParams['font.size'] = 15
@@ -133,6 +134,7 @@ def hist (
         lw=None,
         label=None,
         bintype='linear',
+        weights=None,
         **kwargs
     ):
     if ax is None:
@@ -140,7 +142,10 @@ def hist (
     if gkde_kwargs is None:
         gkde_kwargs = {}
     
-    x = sampling.fmasker(x)
+    if weights is None:
+        x = sampling.fmasker(x)
+    else:
+        x, weights = sampling.fmasker(x, weights)
     if isinstance(bins, int):
         if bintype == 'linear':
             bins = np.linspace(*np.nanquantile(x, [binalpha,1.-binalpha]), bins)
@@ -155,14 +160,14 @@ def hist (
             yval = yval*x.size*np.median(np.diff(bins))*stretch
 
         if orientation=='vertical':
-            imhist = ax.plot ( bins, yval, **kwargs )
+            imhist = ax.plot ( bins, yval, weights=weights, **kwargs )
         elif orientation=='horizontal':
-            imhist = ax.plot ( yval, bins, **kwargs)
+            imhist = ax.plot ( yval, bins, weights=weights, **kwargs)
         else:
             raise ValueError(f"Orientation {orientation} not understood!")
     else:
         if (histtype=='bar')&(alpha<1.)&(lw is not None):                
-            _,_,im = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, **kwargs) 
+            _,_,im = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, weights=weights, **kwargs) 
             if ('color' not in kwargs.keys()) and ('edgecolor' not in kwargs.keys()) and ('ec' not in kwargs.keys()):
                 color = im.patches[0].get_facecolor()
                 color = (color[0], color[1], color[2], 1.)
@@ -171,7 +176,7 @@ def hist (
             else:
                 color = ec.ColorBase (kwargs['color']).base
                 
-            imhist = ax.hist (x, bins, histtype='step', orientation=orientation, density=density, lw=lw, **kwargs) 
+            imhist = ax.hist (x, bins, histtype='step', orientation=orientation, density=density, lw=lw, weights=weights, **kwargs) 
             
             rect = patches.Rectangle(
                 (0.,0.), 
@@ -187,7 +192,7 @@ def hist (
         else:
             if lw is None:
                 lw = 1
-            imhist = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, lw=lw, label=label, **kwargs) 
+            imhist = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, lw=lw, label=label, weights=weights, **kwargs) 
     
     if bintype == 'log':
         ax.set_xscale('log')
@@ -630,7 +635,8 @@ def running_quantile ( x,
                        y, 
                        bins, 
                        markersize=4,
-                       alpha=0.16, 
+                       quantile = 0.5,
+                       alpha=0.16,                        
                        ax=None, 
                        erronqt=False, 
                        label=None, 
@@ -684,7 +690,7 @@ def running_quantile ( x,
     if isinstance(bins, int):
         bins = np.linspace(*np.nanquantile(x, [0.025,0.975]), bins)
            
-    qt = [alpha, 0.5, 1.-alpha]
+    qt = [alpha, quantile, 1.-alpha]
     out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
     
     if show_counts:
