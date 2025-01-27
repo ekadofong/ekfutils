@@ -622,6 +622,17 @@ class BaseInferer (object):
             for sign in [-1.,1.]:
                 ax.plot(plot_ms, predictions[1] + sign*intdisp,color=color, **kwargs)
         return ax    
+    
+    def help ( self ):
+        print('''
+sbmass_fit = fit.BaseInferer()
+sbmass_fit.set_predict ( lambda x, m, b: m*x + b  )
+lnP = sbmass_fit.define_gaussianlikelihood( sbmass_fit.predict, with_intrinsic_dispersion=True )
+sbmass_fit.set_loglikelihood(lnP)
+sbmass_fit.set_uniformprior([[-10.,0.],[10.,40.], [0.,10.]])      
+
+data = (x,y,yerr,xerr=None)
+              ''')
 
 def plawparams_from_pts (xs, ys):
     m = (ys[1]-ys[0])/(xs[1]-xs[0])
@@ -767,3 +778,9 @@ def quickfit ( predict_fn, x, y, u_y=None, bounds=None ):
     fitter.set_uniformprior(fitter.bounds)
     fitter.run((x,y,u_y, None), )
     return fitter
+
+def closedform_leastsq (x,y):
+    w = x.reshape(-1,1)
+    leastsquares_soln = np.matmul(np.matmul(np.linalg.inv(np.matmul(w.T,w)),w.T),y)
+    offset = np.mean(y - (w*leastsquares_soln).flatten(),axis=0)
+    return leastsquares_soln, offset
