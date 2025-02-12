@@ -116,3 +116,4 @@ def cauchy_pdf(x, x0, gamma):
         The probability density at each point x.
     """
     return 1 / (np.pi * gamma * (1 + ((x - x0) / gamma)**2))
+
