@@ -421,6 +421,28 @@ def classfraction ( x_classa, x_classb, bins=10, add=False, alpha=0.05, method='
     confidence_interval = proportion_confint ( hista, denom, alpha=alpha, method=method)
     return bin_edges, hista/denom, confidence_interval
 
+def running_sigmaclip ( x, y, low=4., high=4., xbins=None, Nbins=30, apply=True ):
+    if xbins is None:
+        xbins = np.linspace(np.nanmin(x), np.nanmax(x), Nbins )
+    dx = np.mean(np.diff(xbins))*1.5
+    xmid = midpts(xbins)
+    
+    cuts = np.zeros([len(xbins)-1, 3])
+    cuts[:,0] = xmid
+    for idx,cx in enumerate(xmid):
+        mask = (x > (cx-dx))&(x < (cx+dx))
+        clip = sigmaclip(y[mask], low=low, high=high)
+        cuts[idx,1] = clip.lower
+        cuts[idx,2] = clip.upper
+
+    survivor_mask = (y>np.interp(x, cuts[:,0], cuts[:,1]))&(y<np.interp(x, cuts[:,0], cuts[:,2]))    
+    if apply:    
+        return x[survivor_mask], y[survivor_mask]
+    else:
+        return survivor_mask, cuts
+    
+    
+
 def sigmaclipped_std ( x, low=4., high=4. ):
     return sigmaclip(x,low,high).clipped.std()
 
@@ -440,3 +462,44 @@ def gelmanrubin ( chains ):
     gr_R = (nsteps-1)/nsteps * gr_W + nsteps**-1 * gr_B
     gr_R /= gr_W
     return gr_R
+
+def bin_by_count ( x, min_count, dx_min=0. ):
+    sortmask = np.argsort(x)
+    return_to_orig = np.argsort(sortmask)    
+    sorted_x = x[sortmask]
+    
+    bin_edges = [np.min(x) - abs(np.min(x))*1e-4]
+    while bin_edges[-1] < np.max(x):
+        bin_start = bin_edges[-1]
+        above_cut = sorted_x[sorted_x>=bin_start]
+        #print(min(min_count-1, len(above_cut)-1))
+        if(len(above_cut)-1)<min_count:
+            # \\ hit the end of the sample
+            bin_edges.pop()
+            bin_edges.append(max(x) + abs(max(x))*1e-4)
+        else:
+            dx_count = above_cut[min_count] - bin_start
+            
+            if dx_count > dx_min:
+                bin_edges.append(bin_start + dx_count)
+            else:
+                bin_edges.append(bin_start + dx_min)
+        
+    
+    assns = np.digitize(x, bin_edges) 
+    return assns, np.array(bin_edges)
+        
+    
+def strict_bin_by_count ( x, min_count ):
+    sortmask = np.argsort(x)
+    return_to_orig = np.argsort(sortmask)
+
+    sorted_x = x[sortmask]
+    #sorted_y = y[sortmask]
+    bin_assignments = np.repeat(np.arange(0,len(sorted_x)//min_count), min_count)
+    bin_assignments = np.concatenate([bin_assignments, np.ones(len(sorted_x)-len(bin_assignments))*bin_assignments[-1]])
+    binned = [ sorted_x[bin_assignments==idx] for idx in np.arange(0,bin_assignments[-1]+1) ] 
+    bin_edges = [ np.min(sorted_x[bin_assignments==idx]) for idx in np.arange(0,bin_assignments[-1]+1) ] 
+    bin_edges = np.array(bin_edges + [np.max(sorted_x[bin_assignments==max(bin_assignments)])]) 
+    
+    return bin_assignments[return_to_orig].astype(int), bin_edges
