@@ -351,3 +351,16 @@ def PP04 (n2):
     logOHp12 = np.dot(np.vander ( n2, 4 ), cc)
     return logOHp12
 
+
+def concentration_mass_relation ( mass ):
+    # \\ Child + 2018, table 1
+    m = -0.10
+    A = 3.44
+    m_characteristic = 10.**12.5 * 0.7**-1 * u.M_sun # just after eq. 17
+    mt = 430.49 * m_characteristic
+    c0 = 3.19
+    
+    t1 = mass/mt
+    t2 = 1. + mass/mt
+    concentration = A * ( t1**m * t2**-m - 1. ) + c0
+    return concentration
