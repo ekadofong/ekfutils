@@ -160,9 +160,9 @@ def hist (
             yval = yval*x.size*np.median(np.diff(bins))*stretch
 
         if orientation=='vertical':
-            imhist = ax.plot ( bins, yval, weights=weights, **kwargs )
+            imhist = ax.plot ( bins, yval,**kwargs )
         elif orientation=='horizontal':
-            imhist = ax.plot ( yval, bins, weights=weights, **kwargs)
+            imhist = ax.plot ( yval, bins, **kwargs)
         else:
             raise ValueError(f"Orientation {orientation} not understood!")
     else:
