@@ -780,7 +780,9 @@ def quickfit ( predict_fn, x, y, u_y=None, bounds=None ):
     return fitter
 
 def closedform_leastsq (x,y):
-    w = x.reshape(-1,1)
+    flat = np.ones(x.shape[0])
+    w = np.hstack([flat.reshape(-1,1),x.reshape(x.shape[0],-1)])
     leastsquares_soln = np.matmul(np.matmul(np.linalg.inv(np.matmul(w.T,w)),w.T),y)
-    offset = np.mean(y - (w*leastsquares_soln).flatten(),axis=0)
-    return leastsquares_soln, offset
+    #leastsquares_soln = np.matmul(np.matmul(np.linalg.inv(np.matmul(w.T,w)),w.T),y)
+    #offset = np.mean(y - (w*leastsquares_soln).flatten(),axis=0)
+    return leastsquares_soln
