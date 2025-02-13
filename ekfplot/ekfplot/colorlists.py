@@ -1,3 +1,6 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
 # https://eleanormaclure.wordpress.com/wp-content/uploads/2011/03/colour-coding.pdf
 london_rail_colors = {
     "one": '#5A6A91',
@@ -43,3 +46,33 @@ slides = {
     'yellow':'#E9C46A', 
     'blue':'#4BB8CD'
 }
+
+def display_colorlist (clist):
+    xs = np.arange(0,len(clist))
+    keys = list(clist.keys())
+    
+    fig = plt.figure(figsize=(len(clist), 1.))
+    ax = plt.subplot(111)
+    dy=0.05
+    for idx in xs:
+        key = keys[idx]
+        sign = (idx//2 - idx/2.) < 0. and -1. or 1.
+        ax.scatter(
+            idx,
+            1,
+            color=clist[key],
+            s=10**2
+        )
+        ax.text(
+            idx,
+            1.+sign*dy,
+            key,
+            color=clist[key],
+            ha='center',
+            va=sign < 0 and 'bottom' or 'top',
+        )
+    
+    for spine_direction in ['top','bottom','left','right']:
+        ax.spines[spine_direction].set_alpha(0.)
+    ax.set_xticks([])
+    ax.set_yticks([])
