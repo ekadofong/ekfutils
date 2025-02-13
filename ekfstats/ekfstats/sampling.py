@@ -343,6 +343,64 @@ gaussian = functions.gaussian
 def midpts ( bins ):
     return 0.5*(bins[1:]+bins[:-1])
 
+def running_quantile (x, y, midpts, dx=None, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100, return_counts=False ):
+    if isinstance(qt, float):
+        qt = [qt]    
+    if dx is None:
+        dx = np.median(np.diff(midpts))*0.75
+        
+    if isinstance(midpts, int):
+        midpts = np.linspace(x.min(),x.max(),midpts)
+    if erronqt:
+        ystats = np.zeros([midpts.size, len(qt), 5])
+    else:
+        ystats = np.zeros([midpts.size, len(qt)])    
+    if return_counts:
+        counts = np.zeros(midpts.shape[0], dtype=int)
+        
+
+    if not erronqt:
+        nresamp = 1 
+
+    carr = np.zeros([nresamp, len(midpts), len(qt)])       
+    for rindex in range(nresamp):
+        choice = np.random.choice(x.size, x.size, replace=True)
+        
+        # \\ resample from uncertainties assuming Gaussian, if applicable
+        if not erronqt:
+            xpull = x # \\ if no err estimate just use the sample
+        elif xerr is not None:
+            xpull = np.random.normal(x[choice], xerr)
+        else:
+            xpull = x[choice]
+        
+        if not erronqt:
+            ypull = y
+        elif yerr is not None:
+            ypull = np.random.normal(y[choice], yerr)
+        else:
+            ypull = y[choice]
+            
+        for idx in range(midpts.size):
+            xmin = midpts[idx] - dx
+            xmax = midpts[idx] + dx
+            mask = (xpull>=xmin)&(xpull<xmax)
+
+            outcome = np.nanquantile ( ypull[mask], qt )
+            if erronqt:
+                carr[rindex,idx] = outcome
+            else:
+                ystats[idx] = outcome
+    
+    # \\ if we did error estimation, summary stats for that estimation
+    if erronqt:
+        #ystats = np.nanquantile(carr, [0.025,.16,.5,.84,.95], axis=0).T.reshape(len(midpts),len(qt),5)
+        ystats = np.zeros([len(midpts), len(qt), 5])
+        for ix,eqt in enumerate([0.025,.16,.5,.84,.95]):
+            ystats[:,:,ix] = np.nanquantile(carr, eqt, axis=0)
+    return midpts, ystats, dx
+                
+
 def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100, return_counts=False ):
     if isinstance(bins, int):
         bins = np.linspace( np.nanmin(x), np.nanmax(x), bins )
