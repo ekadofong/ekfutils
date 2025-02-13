@@ -175,7 +175,7 @@ def hist (
                 kwargs['label'] = None
             else:
                 color = ec.ColorBase (kwargs['color']).base
-                
+                        
             imhist = ax.hist (x, bins, histtype='step', orientation=orientation, density=density, lw=lw, weights=weights, **kwargs) 
             
             rect = patches.Rectangle(
@@ -188,7 +188,18 @@ def hist (
                 label=label
             )
             ax.add_patch(rect)
+        elif histtype=='step':
+            if lw is None:
+                lw = 1.
+            # \\ add white outline around hist step
+            outline_kwargs = kwargs.copy()
+            if 'color' in kwargs.keys():                
+                outline_kwargs['color'] = 'w'
+            if 'ls' in outline_kwargs.keys():
+                outline_kwargs['ls'] = '-'
             
+            ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, lw=lw*1.2, weights=weights, **outline_kwargs)                 
+            imhist = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, lw=lw, label=label, weights=weights, **kwargs) 
         else:
             if lw is None:
                 lw = 1
@@ -341,6 +352,11 @@ def hist2d (
         axarr[1].set_xlim(ax.get_xlim())
         axarr[2].hist ( y, bins=bins[1], orientation='horizontal', color=proj_color, **proj_kwargs)
         axarr[2].set_ylim(ax.get_ylim())
+        
+        # \\ remove 0 that often clashes with main axes
+        xticklabels = axarr[2].get_xticklabels()
+        xticklabels[0] = ''
+        axarr[2].set_xticklabels(xticklabels)
     
     return im, axarr
 
@@ -468,7 +484,7 @@ def errorbar ( x, y, xlow=None, xhigh=None, ylow=None, yhigh=None, ax=None, c=No
         return ax, im
     return ax
 
-def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1, quantiles=None, **kwargs):
+def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1, quantiles=None, filled=True, **kwargs):
     """
     Draw a combination of scatter plot and density contour plot. 
 
@@ -487,6 +503,8 @@ def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1,
     quantiles : array_like, optional
         An array of quantiles used to compute contour levels, where each level encloses the specified 
         fraction of the distribution. Default is None.
+    filled : bool, optional
+        If True, call contourf. Else, call contour.
     **kwargs : dict, optional
         Additional keyword arguments passed to `density_contour`.
 
@@ -506,7 +524,7 @@ def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1,
         cmap = getattr(plt.cm, cmap)
     scatter_color = cmap(0.5)
     s_im = ax.scatter ( data_x, data_y, zorder=0, color=scatter_color, s=scatter_s )  
-    c_im, ax = density_contour ( data_x, data_y, ax, cmap=cmap, quantiles=quantiles, filled=True, **kwargs )  
+    c_im, ax = density_contour ( data_x, data_y, ax, cmap=cmap, quantiles=quantiles, filled=filled, **kwargs )  
     return (s_im, c_im), ax
 
 def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False,binalpha=0.005, **kwargs):
@@ -540,6 +558,7 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
     """
     if ax is None:        
         ax = plt.subplot(111)
+    
     
     data_x, data_y = sampling.fmasker ( data_x, data_y) 
 
@@ -592,6 +611,7 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
                 kwargs['color'] = kwargs['cmap'](0.5)
             del kwargs['cmap']
         ax.plot ( 0, 0, label=label, lw=2, **kwargs)
+    
     return im, ax
     
 
@@ -640,11 +660,14 @@ def running_quantile ( x,
                        ax=None, 
                        erronqt=False, 
                        label=None, 
+                       xerr=None,
                        yerr=None,
                        err_format='errorbar', 
                        std_format='errorbar',
                        std_alpha=0.15, 
                        err_alpha=0.15,
+                       aggregation_mode='running',
+                       dx=None,
                        show_counts=False, 
                        ytext = 0.3,
                        text_kwargs = None,
@@ -691,18 +714,30 @@ def running_quantile ( x,
         bins = np.linspace(*np.nanquantile(x, [0.025,0.975]), bins)
            
     qt = [alpha, quantile, 1.-alpha]
-    out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
+    if aggregation_mode=='binned':
+        out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
+    elif aggregation_mode=='running':
+        if show_counts:
+            raise NotImplementedError
+        out = sampling.running_quantile ( x, y, midpts=bins, qt=qt, erronqt=erronqt, xerr=xerr, yerr=yerr, dx=dx)
     
     if show_counts:
         xmid, ystat, counts = out        
-    else:
-        xmid, ystat = out
+    else:   
+        if aggregation_mode=='binned': 
+            xmid, ystat = out
+            xlow = bins[:-1]
+            xhigh = bins[1:]
+        elif aggregation_mode=='running':
+            xmid,ystat,dx = out
+            xlow = bins - dx
+            xhigh = bins+dx 
     
     if erronqt:
         if err_format == 'errorbar':
             errorbar ( xmid, ystat[:,1,2],
-                    xlow = bins[:-1],
-                    xhigh = bins[1:], 
+                    xlow = xlow,
+                    xhigh = xhigh,
                     ylow=ystat[:,1,1],
                     yhigh=ystat[:,1,3],
                     ax=ax,
@@ -713,10 +748,11 @@ def running_quantile ( x,
             
        
         elif err_format == 'fill_between':            
-            ax.plot (
+            outlined_plot (
                 xmid,
                 ystat[:,1,2],   
                 label=label,
+                ax=ax,
                 **kwargs             
             )
             ax.fill_between (
@@ -736,6 +772,7 @@ def running_quantile ( x,
         else:
             raise ValueError (f"err_format:{err_format} not recognized!")
         if show_std:
+            # \\ extend to fill full domain
             ypad = np.zeros( [1+ystat.shape[0],2] )
             ypad[1:,0] = ystat[:,0,2]
             ypad[1:,1] = ystat[:,2,2]
@@ -753,12 +790,13 @@ def running_quantile ( x,
                         **kwargs
                     )
             else:
-                ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=std_alpha,**kwargs )           
+                #ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=std_alpha,**kwargs )           
+                ax.fill_between ( bins, ystat[:,0,2], ystat[:,2,2], alpha=std_alpha,**kwargs)
     else:
         if std_format == 'errorbar':  
             errorbar ( xmid, ystat[:,1],
-                    xlow = bins[:-1],
-                    xhigh = bins[1:], 
+                    xlow = xlow,
+                    xhigh = xhigh, 
                     ylow=ystat[:,0],
                     yhigh=ystat[:,2],
                     ax=ax,
