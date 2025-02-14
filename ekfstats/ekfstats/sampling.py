@@ -509,16 +509,20 @@ def gelmanrubin ( chains ):
     Gelman-Rubin statistic to quantify chain convergence.
     '''
     # assume chains are emcee-like, i.e. dimensions are STEP/WALKER/PARAMETER
-    mean_val_of_chains = np.mean(chains,axis=0)
-    mean_of_chainmeans = np.mean(mean_val_of_chains)
+    mean_val_of_chains = np.mean(chains,axis=0)    
+    mean_of_chainmeans = np.mean(mean_val_of_chains, axis=0)
+
     nsteps = chains.shape[0]
     nwalkers = chains.shape[1]
-    gr_B = nsteps/(nwalkers-1)*np.sum((mean_val_of_chains-mean_of_chainmeans)**2)
+    nparam = chains.shape[2]
+    gr_B = nsteps/(nwalkers-1)*np.sum((mean_val_of_chains-mean_of_chainmeans)**2,axis=(0,1))
     mvals = mean_val_of_chains.reshape(1,*mean_val_of_chains.shape)
-    gr_W = nwalkers**-1*((nsteps-1)**-1*np.sum((chains-mvals)**2))
+    gr_W = nwalkers**-1*((nsteps-1)**-1*np.sum((chains-mvals)**2,axis=(0,1)))
     
     gr_R = (nsteps-1)/nsteps * gr_W + nsteps**-1 * gr_B
     gr_R /= gr_W
+    
+    assert gr_R.size == nparam
     return gr_R
 
 def bin_by_count ( x, min_count, dx_min=0. ):
