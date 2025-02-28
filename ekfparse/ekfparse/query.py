@@ -446,7 +446,15 @@ def load_gamacatalogs (gama_dir=None):
     #gama_lines = gama_lines.loc[~gama_lines.index.duplicated()]
     gama_phot = table.Table(fits.getdata(f'{gama_dir}local_data/ApMatchedCatv06.fits', 1)).to_pandas().set_index("CATAID")
     gama_phot = gama_phot.loc[~gama_phot.index.duplicated()]
+    
+    #\\photometry
     gama_phot['r_mag'] = gama_phot['MAG_PETRO_r'] #-2.5*np.log10(gama_phot['r_flux']/3631.)
+    r_circ_pixel = gama_phot['PETRO_RADIUS'] * gama_phot['B_IMAGE']/gama_phot['A_IMAGE']
+    arcsec_per_pizel = 0.339 # arcsec / pixel, see final notes of https://www.gama-survey.org/dr4/schema/table.php?id=445
+    r_circ_arcsec = r_circ_pixel * arcsec_per_pizel
+    gama_phot['radius'] = r_circ_arcsec
+    gama_phot['sb_r'] = gama_phot['r_mag'] + 2.5*np.log10(2.*np.pi*gama_phot['radius']**2)
+    
     for band in 'griz':
         gama_phot[f'{band}_flux'] = 10.**(gama_phot[f'MAG_PETRO_{band}']/-2.5) * 3631*1e9
 
@@ -457,7 +465,7 @@ def load_gamacatalogs (gama_dir=None):
                            'NIIB_FLUX','NIIB_FLUX_ERR',
                            'NIIR_FLUX','NIIR_FLUX_ERR',
                            ]], on='SPECID').set_index('CATAID')\
-            .join(gama_phot[['g_flux','r_flux','i_flux','r_mag']])
+            .join(gama_phot[['g_flux','r_flux','i_flux','r_mag','radius','sb_r']])
     return catalog
 
 def load_sdsscatalogs (sdss_dir=None, zmax=0.05, use_scratch=True):
