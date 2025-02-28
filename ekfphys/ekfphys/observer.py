@@ -6,7 +6,7 @@ from astropy import constants as co
 from astropy.modeling.physical_models import BlackBody
 from .calc_kcor import calc_kcor
 
-def gecorrection(wave, Av, Rv=3.1, unit='AA', return_magcorr=False):
+def gecorrection(wave, AvorEBV, Rv=3.1, unit='AA', etype='AV', return_magcorr=False):
     """Calculate the Galactic extinction correction for a given wavelength and Av.
 
     Parameters:
@@ -28,6 +28,14 @@ def gecorrection(wave, Av, Rv=3.1, unit='AA', return_magcorr=False):
         Extinction correction factor for the given wavelength(s). If `return_magcorr` is True,
         then the result is the extinction correction in magnitudes.
     """
+    if etype == 'AV':
+        Av = AvorEBV
+    elif etype == 'EBV':
+        Av = Rv * AvorEBV
+        
+    if isinstance(wave, float) or isinstance(wave, int):
+        wave = np.array([wave], dtype=float)        
+    
     Alambda = extinction.ccm89(wave, Av, Rv, unit=unit.lower())
     if return_magcorr:
         return Alambda
