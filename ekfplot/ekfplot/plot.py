@@ -357,6 +357,9 @@ def hist2d (
         xticklabels = axarr[2].get_xticklabels()
         xticklabels[0] = ''
         axarr[2].set_xticklabels(xticklabels)
+        yticklabels = axarr[1].get_yticklabels()
+        yticklabels[0] = ''
+        axarr[1].set_yticklabels(yticklabels)        
     
     return im, axarr
 
@@ -399,7 +402,18 @@ def outlined_plot ( x, y,  *args, color='k', lw=4, ls='-', outline_thickness=Non
     ax.plot ( x,y, *args, lw=lw, color=color, ls=ls, label=label, **kwargs )
     return ax
 
-def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidth=1., coord_type='relative', **kwargs ):
+def text (
+        rx, 
+        ry, 
+        text, 
+        ax=None, 
+        ha=None, 
+        va=None, 
+        bordercolor=None, 
+        borderwidth=1., 
+        coord_type='relative', 
+        **kwargs 
+    ):
     if ax is None:
         ax = plt.subplot(111)
     
@@ -408,7 +422,21 @@ def text ( rx, ry, text, ax=None, ha=None, va=None, bordercolor=None, borderwidt
     if va is None:
         va = 'top' if ry > .5 else 'bottom'
     
-    if coord_type == 'relative':
+    if isinstance(coord_type, tuple) or isinstance(coord_type,list):
+        if coord_type[0] == 'relative':
+            if ax.get_xscale() == 'log':
+                rx = 10.**(-1.*np.subtract(*np.log10(ax.get_xlim()))*rx + np.log10(ax.get_xlim()[0]))
+            else:
+                rx = -1.*np.subtract(*ax.get_xlim())*rx + ax.get_xlim()[0]
+        if coord_type[1] == 'relative':
+            if ax.get_yscale() == 'log':
+                ry = 10.**(-1.*np.subtract(*np.log10(ax.get_ylim()))*ry + np.log10(ax.get_ylim()[0]))
+            else:
+                ry = -1.*np.subtract(*ax.get_ylim())*ry + ax.get_ylim()[0] 
+
+   
+        txt = ax.text ( rx, ry, text, ha=ha, va=va, **kwargs ) 
+    elif coord_type == 'relative':
         txt = ax.text ( rx, ry, text, transform=ax.transAxes, ha=ha, va=va, **kwargs )
     elif coord_type == 'absolute':
         txt = ax.text ( rx, ry, text, ha=ha, va=va, **kwargs )
@@ -763,10 +791,11 @@ def running_quantile ( x,
                 **kwargs
             )
         elif err_format is None:
-            ax.plot (
+            outlined_plot (
                 xmid,
                 ystat[:,1,2],   
                 label=label,
+                ax=ax,
                 **kwargs             
             )            
         else:
@@ -781,7 +810,7 @@ def running_quantile ( x,
                         
             if err_format == 'fill_between':
                 for eidx in range(2):
-                    ax.plot ( xmid, ystat[:,eidx*2,2], dashes=[5,2.5], **kwargs)
+                    outlined_plot ( xmid, ystat[:,eidx*2,2], dashes=[5,2.5], ax=ax, **kwargs)
                     ax.fill_between(
                         xmid,
                         ystat[:,eidx*2,1],
@@ -801,6 +830,7 @@ def running_quantile ( x,
                     yhigh=ystat[:,2],
                     ax=ax,
                     label=label,
+                    markersize=markersize,
                     **kwargs
                     )
         elif std_format == 'fill_between':
@@ -808,23 +838,32 @@ def running_quantile ( x,
                 color = kwargs['ecolor']
             elif 'color' in kwargs.keys():
                 color = kwargs['color']
+                kwargs.pop('color')
             else:
                 color = 'k'
             color = ec.ColorBase(color)
             
+            outlined_plot(
+                xmid,
+                ystat[:,1],
+                color=color.base,
+                ax=ax,
+                **kwargs
+            )
             ax.fill_between(
                 xmid,
                 ystat[:,0],
                 ystat[:,2],
-                #alpha=std_alpha,
+                alpha=std_alpha,
                 color=color.modulate(1.-std_alpha).base
             )
             for statindex in [0,2]:
-                ax.plot(
+                outlined_plot(
                     xmid,
                     ystat[:,statindex],
-                    lw=3,
-                    color=color.base
+                    color=color.base,
+                    ax=ax,
+                    **kwargs
                 )  
                 
             # \\ make legend icon
@@ -1061,6 +1100,7 @@ def add_physbar ( xcenter, y, pixscale, distance, ax=None, bar_physical_length =
 def histstack ( 
                 x,
                 y, 
+                w=None,
                 ax=None, 
                 xbins=10, 
                 ybins=10,
@@ -1091,8 +1131,12 @@ def histstack (
     zidx=0
     has_shown_label=False
     for bin_index in np.arange(1, xbins.size)[::-1]:
-        histout = np.histogram(y[assns==bin_index], bins=ybins)    
-        base = np.median(x[assns==bin_index])
+        if w is None:
+            weights = None
+        else:
+            weights = w[assns==bin_index]
+        histout = np.histogram(y[assns==bin_index], weights=weights, bins=ybins)    
+        base = np.median(x[assns==bin_index])        
         xspan = xbins[bin_index] - xbins[bin_index-1]
         ys = stretch*xspan*histout[0]/histout[0].max() + base        
         shift = (ys.max()-ys.min())*.4
