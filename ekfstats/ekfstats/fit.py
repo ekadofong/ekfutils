@@ -6,8 +6,12 @@ from astropy.modeling.models import Sersic1D, Sersic2D, Const1D, Const2D
 from astropy.modeling.fitting import LevMarLSQFitter
 import emcee
 
+from ekfplot import colors as ec
+from ekfplot import legend
+
 from . import functions as ef
 from . import sampling 
+
 
 
 class LFitter ( object ):
@@ -276,7 +280,7 @@ class LFitter ( object ):
         fig, axarr = plt.subplots(self.sampler.ndim, 1, figsize=(10,fsize*self.sampler.ndim))
         for aindex, ax in enumerate(axarr):
             for windex in range(self.sampler.nwalkers):
-                ax.plot ( chain[:, windex, aindex], color='k', alpha=0.01)    
+                ax.plot ( chain[:, windex, aindex], color='grey', alpha=0.01)    
     
     
 class FlexFitter ( LFitter ):
@@ -443,14 +447,11 @@ class BaseInferer (object):
             self.ndim = len(bounds)
         self.bounds = bounds    
         
-    def chain_convergence_statistics (self, fdiscard=0.2):
+    def chain_convergence_statistics (self, fdiscard=0.):
         chain = self.sampler.get_chain ()
         ndiscard = int(chain.shape[0]*fdiscard)
-        chain = chain[ndiscard:]
-        gr_stats = np.zeros(chain.shape[2])
-        for idx in range(chain.shape[2]):
-            gr_stats[idx] = sampling.gelmanrubin(chain[:,:,idx])
-        
+        chain = chain[ndiscard:]       
+        gr_stats = sampling.gelmanrubin(chain)
         return gr_stats
     
     def set_loglikelihood ( self, likelihood_fn ):
@@ -466,9 +467,10 @@ class BaseInferer (object):
             return -np.inf
         
         lnP += self.loglikelihood ( theta, data )
-        return lnP    
+        return lnP   
     
-    def run (self, data, initial=None, steps=500, nwalkers=32, progress=True):
+    
+    def run (self, data, initial=None, steps=500, nwalkers=32, progress=True, niter=10):
         '''
         Run the MCMC inference
         ''' 
@@ -487,6 +489,38 @@ class BaseInferer (object):
         )
 
         sampler.run_mcmc(initial, steps, progress=progress)
+        
+        idx = 1
+        while idx < niter:
+            # \\ based off of DFM recommendation here:
+            # \\ https://groups.google.com/g/emcee-users/c/fg7sQNw8YcU?pli=1
+            # \\ My usual recommendation here is to run a burn in as follows:
+            # \\ 
+            # \\ 1. Run a short (few hundred steps) chain
+            # \\ 2. Reinitialize all the walkers near the point with maximum log probability seen so far
+            # \\ 3. Return to step 1 a few times
+            # \\ 4. Then run your final chain starting where you ended up for your last run of step 1
+            # \\ 
+            # \\ That normally does the trick! 
+            # \\
+            # \\  Gelman and Rubin (1992) and Brooks and Gelman (1998) suggest that 
+            # \\ diagnostic Rc values greater than 1.2 for any of the model parameters should indicate nonconvergence
+            print('Re-initializing walkers...')
+            fullchains = sampler.get_chain()
+            chains = fullchains[(idx-1)*steps:]
+            gr_statistic = sampling.gelmanrubin(fullchains)
+            if (gr_statistic < 1.2).all():
+                print('Convergence achieved')
+                idx = niter + 1
+            else:
+                print(f'max(GR) = {max(gr_statistic):.3f}')
+                lp_est = np.median(chains,axis=(0,1))
+                std_chains = np.subtract(*np.nanquantile(chains,[0.6,.4], axis=(0,1),)) # \\ restrictive)
+                
+                new_initial_positions = np.random.normal(lp_est, std_chains, [nwalkers, sampler.ndim])
+                sampler.run_mcmc(new_initial_positions, steps, progress=progress)
+                idx += 1
+        
         self.sampler = sampler   
         
     def get_param_estimates ( self, fdiscard=0.6, alpha=0.32 ):
@@ -499,7 +533,7 @@ class BaseInferer (object):
         fchain = self.sampler.get_chain(flat=True, discard=discard)
         return np.quantile(fchain, [alpha/2.,.5,1. - alpha/2.], axis=0)            
     
-    def predict_from_run ( self, x ) :
+    def predict_from_run ( self, x, stochastic=False ) :
         """
         Predicts the MaPost model for a given input value(s) using the model parameters obtained from a previous run.
 
@@ -510,7 +544,17 @@ class BaseInferer (object):
         - prediction: A 1D numpy array with three elements representing the median and upper/lower bounds of the model predictions for the given input value(s).
         """        
         assert hasattr(self, 'predict'), "No prediction function stored!"
-        args = self.get_param_estimates ()[1]
+        if not stochastic:
+            args = self.get_param_estimates ()[1]
+        else:
+            if not hasattr(self, 'fchain'):
+                fchain = self.sampler.get_chain(flat=True,)
+                self.fchain = fchain
+            else:
+                fchain = self.fchain
+            
+            args = fchain[np.random.randint(fchain.shape[0])]
+            
         if self.has_intrinsic_dispersion:
             args = args[:-1]
         prediction = self.predict ( x, *args )
@@ -600,6 +644,8 @@ class BaseInferer (object):
     
     def plot_uncertainties (self, ms, ax=None, color='k', transparency=0.9, alpha=0.32, 
                             discard=100,xscale='linear', yscale='linear', label=None, show_std=True, lw=2, show_median=True, **kwargs ):
+        from ekfplot.plot import outlined_plot
+        
         if ax is None:
             ax = plt.subplot(111)
         
@@ -610,17 +656,19 @@ class BaseInferer (object):
             plot_ms = 10.**ms
         if yscale=='linear':
             if show_median:
-                ax.plot(plot_ms, predictions[1],color=color, label=label, **kwargs)
-            ax.fill_between(plot_ms, predictions[0], predictions[2], alpha=1.-transparency, color=color, **kwargs)
+                outlined_plot(plot_ms, predictions[1],color=color, label=label, lw=lw, ax=ax, **kwargs)
+            ax.fill_between(plot_ms, predictions[0], predictions[2], alpha=1.-transparency, color=color, lw=lw, **kwargs)
         elif yscale=='log':
             if show_median:
-                ax.plot(plot_ms, 10.**predictions[1],color=color, label=label, lw=lw, **kwargs)
+                outlined_plot(plot_ms, 10.**predictions[1],color=color, label=label, lw=lw, ax=ax, **kwargs)
             ax.fill_between(plot_ms, 10.**predictions[0], 10.**predictions[2], alpha=1.-transparency, color=color, **kwargs)    
         
         if self.has_intrinsic_dispersion and show_std:
             intdisp = self.get_param_estimates ()[1,-1]
             for sign in [-1.,1.]:
-                ax.plot(plot_ms, predictions[1] + sign*intdisp,color=color, **kwargs)
+                outlined_plot(plot_ms, predictions[1] + sign*intdisp,color=color, lw=lw*.85, ax=ax, **kwargs)
+                
+        
         return ax    
     
     def help ( self ):
