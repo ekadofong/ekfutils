@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from . import colors as ec
 
 # https://eleanormaclure.wordpress.com/wp-content/uploads/2011/03/colour-coding.pdf
 london_rail_colors = {
@@ -57,17 +58,22 @@ def display_colorlist (clist):
     for idx in xs:
         key = keys[idx]
         sign = (idx//2 - idx/2.) < 0. and -1. or 1.
+        
+        base_color = clist[key]
+        if isinstance(base_color, ec.ColorBase):
+            base_color = base_color.base
+            
         ax.scatter(
             idx,
             1,
-            color=clist[key],
+            color=base_color,
             s=10**2
         )
         ax.text(
             idx,
             1.+sign*dy,
             key,
-            color=clist[key],
+            color=base_color    ,
             ha='center',
             va=sign < 0 and 'bottom' or 'top',
         )
