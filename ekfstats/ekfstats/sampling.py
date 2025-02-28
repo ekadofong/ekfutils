@@ -284,28 +284,96 @@ def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quan
     
     emetric = efunc(resampled_metric)
     return emetric
+
+def poissonian_histsample ( r, bins=10, size=2000, **kwargs ):
+    y_r,bin_edges = np.histogram(
+        r,
+        bins=bins,         
+        **kwargs
+    )
     
+    sample = np.zeros([size, len(y_r)])
+    for idx in range(len(y_r)):
+        sample[:,idx] = stats.poisson.rvs (mu=y_r[idx], size=size)
+    return sample,  midpts(bin_edges)
+    
+def gamma_histcounts (r, bins=10, ci=0.68, weights=None, return_generator=False, weight_fn=None, **kwargs):
+    alpha = (1. - ci)/2.       
+    y_r,_ = np.histogram(
+        r,
+        bins=bins,         
+        **kwargs
+    ) 
+    raw_counts = y_r.copy()
+    upper_limit_counts = stats.gamma.ppf(1.-alpha, y_r + 0.5, scale=1) 
+    lower_limit_counts = stats.gamma.ppf(alpha, y_r+0.5, scale=1)   
+
+    weighted_hist,bin_edges = np.histogram(
+        r,
+        bins=bins,  
+        weights=weights,       
+        **kwargs
+    )
+    # \\ replace 0 counts with 1 count * average weight
+    
+    if weight_fn is None:
+        weighted_hist[weighted_hist==0] = np.nanmedian(weights)
+    else:       
+        #import matplotlib.pyplot as plt
+        #plt.scatter(
+        #    r,
+        #    weights
+        #)
+        #ms = np.linspace(6., 10.5)
+        #plt.plot(
+        #    ms,
+        #    weight_fn(ms)
+        #)
+        #plt.yscale('log')
+        weighted_hist[weighted_hist==0] = weight_fn(midpts(bin_edges)[weighted_hist==0])
+    y_r[y_r == 0] = 1
+
+
+    upper_limit_weighted = weighted_hist * upper_limit_counts / y_r
+    lower_limit_weighted = weighted_hist * lower_limit_counts / y_r
+  
+    if return_generator:
+        limits = (lower_limit_weighted, upper_limit_weighted) 
+        generator = lambda n: stats.gamma.rvs (raw_counts+0.5, scale=1, size=(n,len(raw_counts))) * weighted_hist/y_r
+        return generator, limits
+    else:
+        return (lower_limit_weighted, upper_limit_weighted) 
+
 def poissonian_histcounts (r, bins=10, ci=0.68, weights=None, **kwargs):
     alpha = (1. - ci)/2.
-
+    
     y_r,_ = np.histogram(
         r,
         bins=bins,         
         **kwargs
     ) 
     upper_limit_counts = stats.poisson.ppf(1.-alpha, y_r)
+    # \\ P(0|mu) = exp(-mu) = 0.05 simplified for N=0
+    # \\ mu ~ 2.3  upper limit of one-sided 95% confidence
+    ul = -np.log(1.- ci)    
+    upper_limit_counts = np.where(np.isclose(upper_limit_counts,0), ul, upper_limit_counts)    
     lower_limit_counts = stats.poisson.ppf(alpha, y_r)
     lower_limit_counts = np.where(lower_limit_counts>0, lower_limit_counts, 1)
-    
+
     weighted_hist,_ = np.histogram(
         r,
         bins=bins,  
         weights=weights,       
         **kwargs
-    )     
-    
+    )
+    # \\ replace 0 counts with 1 count * average weight
+    weighted_hist[weighted_hist==0] = np.nanmedian(weights)
+    y_r[y_r == 0] = 1
+
     upper_limit_weighted = weighted_hist * upper_limit_counts / y_r
     lower_limit_weighted = weighted_hist * lower_limit_counts / y_r
+    #print("ULC")
+    #print(weighted_hist)    
     return (lower_limit_weighted, upper_limit_weighted)    
     
 def bootstrap_histcounts(r,bins=10,npull=1000,weights=None,err=0., u_weights=0., **kwargs):    
@@ -526,6 +594,7 @@ def gelmanrubin ( chains ):
     return gr_R
 
 def bin_by_count ( x, min_count, dx_min=0. ):
+    x = fmasker(x)
     sortmask = np.argsort(x)
     return_to_orig = np.argsort(sortmask)    
     sorted_x = x[sortmask]
@@ -535,10 +604,10 @@ def bin_by_count ( x, min_count, dx_min=0. ):
         bin_start = bin_edges[-1]
         above_cut = sorted_x[sorted_x>=bin_start]
         #print(min(min_count-1, len(above_cut)-1))
-        if(len(above_cut)-1)<min_count:
+        if(len(above_cut)-2)<min_count: # - 2 so that we don't end up wit a last bin of one item
             # \\ hit the end of the sample
             bin_edges.pop()
-            bin_edges.append(max(x) + abs(max(x))*1e-4)
+            bin_edges.append(max(x) + abs(max(x))*1e-4)            
         else:
             dx_count = above_cut[min_count] - bin_start
             
