@@ -25,9 +25,9 @@ def convert_label_to_log ( label, single_spaced=True ):
     else:
         unit = unit.strip().strip('$')
     if single_spaced:
-        return r'$\log_{10}(%s/[%s])$' % (name, unit)
+        return r'$\log_{10}(%s/%s)$' % (name, unit)
     else:
-        return r'$\log_{10}\left(\frac{%s}{[%s]}\right)$' % (name, unit)
+        return r'$\log_{10}\left(\frac{%s}{%s}\right)$' % (name, unit)
 
 common_labels = {
     'mstar':r'${\rm M}_\bigstar$ [${\rm M}_\odot$]',                                    # \\ stellar mass
@@ -80,6 +80,19 @@ def loglog (ax=None):
     ax.set_xscale('log')
     ax.set_yscale('log')
 
+
+def oneone ( ax=None, color='grey', ls='--', **kwargs):
+    if ax is None:
+        ax = plt.subplot(111)
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    lim = [min(xlim[0],ylim[0]), max(xlim[1],ylim[1])]
+    
+    ax.set_xlim(lim)
+    ax.set_ylim(lim)
+    xs = np.linspace(*lim,10)
+    ax.plot(xs,xs, color=color, ls=ls, **kwargs)
+    
 
 def set_formatting ():
     plt.rcParams['font.size'] = 15
@@ -398,9 +411,9 @@ def outlined_plot ( x, y,  *args, color='k', lw=4, ls='-', outline_thickness=Non
     if outline_thickness is None:
         outline_thickness = lw*2
       
-    ax.plot ( x,y, *args, lw=outline_thickness, ls='-', color=bkgcolor, **kwargs )  
+    line = ax.plot ( x,y, *args, lw=outline_thickness, ls='-', color=bkgcolor, **kwargs )  
     ax.plot ( x,y, *args, lw=lw, color=color, ls=ls, label=label, **kwargs )
-    return ax
+    return ax, line
 
 def text (
         rx, 
@@ -700,6 +713,7 @@ def running_quantile ( x,
                        ytext = 0.3,
                        text_kwargs = None,
                        show_std=True,
+                       against='values',
                        **kwargs ):
     '''
         Compute running quantiles for a set of data points within specified bins.
@@ -742,12 +756,18 @@ def running_quantile ( x,
         bins = np.linspace(*np.nanquantile(x, [0.025,0.975]), bins)
            
     qt = [alpha, quantile, 1.-alpha]
-    if aggregation_mode=='binned':
-        out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
-    elif aggregation_mode=='running':
-        if show_counts:
-            raise NotImplementedError
-        out = sampling.running_quantile ( x, y, midpts=bins, qt=qt, erronqt=erronqt, xerr=xerr, yerr=yerr, dx=dx)
+    if against == 'values':
+        if aggregation_mode=='binned':
+            out = sampling.binned_quantile ( x, y, bins=bins, qt=qt, erronqt=erronqt, yerr=yerr, return_counts=show_counts)
+        elif aggregation_mode=='running':
+            if show_counts:
+                raise NotImplementedError
+            out = sampling.running_quantile ( x, y, midpts=bins, qt=qt, erronqt=erronqt, xerr=xerr, yerr=yerr, dx=dx)
+    elif against == 'orthogonal':
+        out = sampling.quantiles_against_orthogonalproj(x, y, bins, aggregation_mode=aggregation_mode,
+                                                        qt=qt, erronqt=erronqt, xerr=xerr, yerr=yerr, dx=dx)
+    else:
+        raise ValueError(f'Bin against type `{against}` not understood!')
     
     if show_counts:
         xmid, ystat, counts = out        
@@ -1108,9 +1128,10 @@ def histstack (
                 show_quantile=True,
                 quantiles=[0.16,0.5,0.84],
                 quantile_kwargs={},
-                edgecolor='k',
-                facecolor='lightgrey',
-                quantilecolor='k',
+                color='k',
+                edgecolor=None,
+                facecolor=None,
+                quantilecolor=None,
                 linewidth=1, 
                 stretch=1.2,
                 color_by_count=True,
@@ -1119,6 +1140,15 @@ def histstack (
     if ax is None:
         ax = plt.subplot(111)
 
+    if isinstance(color, str):
+        color = ec.ColorBase(color)
+    if edgecolor is None:
+        edgecolor = color.modulate(-0.2).base
+    if facecolor is None:
+        facecolor = color.modulate(0.2).base
+    if quantilecolor is None:
+        quantilecolor = color.modulate(-0.4).base
+    
     if isinstance(xbins, int):
         xbins = np.linspace(*np.quantile(sampling.fmasker(x), [binalpha, 1.-binalpha]), num=xbins)
     if isinstance(ybins, int):

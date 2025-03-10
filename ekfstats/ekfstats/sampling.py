@@ -467,7 +467,8 @@ def running_quantile (x, y, midpts, dx=None, xerr=None, yerr=None, qt=0.5, erron
         for ix,eqt in enumerate([0.025,.16,.5,.84,.95]):
             ystats[:,:,ix] = np.nanquantile(carr, eqt, axis=0)
     return midpts, ystats, dx
-                
+
+
 
 def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100, return_counts=False ):
     if isinstance(bins, int):
@@ -509,6 +510,37 @@ def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, n
         return xmid, ystats, counts
     return xmid, ystats
 
+def quantiles_against_orthogonalproj ( x, y, bins, return_proj=False, aggregation_mode = 'running', **kwargs ):
+    '''
+    Bin against the 
+    '''
+    ell = y-x
+    xc = x + ell/2.
+    d = ell/np.sqrt(2.)    
+    
+    if aggregation_mode == 'running':
+        xcmid, qt, dxc = running_quantile(
+            xc,
+            d,
+            midpts(bins),
+            **kwargs,        
+        )   
+    elif aggregation_mode == 'binned':
+        xcmid, qt = binned_quantile(
+            xc,
+            d,
+            bins,
+            **kwargs,        
+        )           
+    
+    if return_proj:
+        if aggregation_mode=='running':
+            return xcmid, qt, dxc
+        return xcmid, qt
+    else:
+        xp = xcmid
+        yp = (xcmid + qt.T/np.sqrt(2.)).T        
+        return xp, yp, dxc
 
 def classfraction ( x_classa, x_classb, bins=10, add=False, alpha=0.05, method='jeffreys' ):
     """
@@ -546,6 +578,8 @@ def classfraction ( x_classa, x_classb, bins=10, add=False, alpha=0.05, method='
         denom = histb
     confidence_interval = proportion_confint ( hista, denom, alpha=alpha, method=method)
     return bin_edges, hista/denom, confidence_interval
+
+
 
 def running_sigmaclip ( x, y, low=4., high=4., xbins=None, Nbins=30, apply=True ):
     if xbins is None:
