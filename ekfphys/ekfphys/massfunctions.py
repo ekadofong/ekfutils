@@ -26,12 +26,12 @@ def integrate_up_massfunction ( mf, logm_grid, integration_type='quad', mf_scale
         return logm_grid, result
 
 
-def abundance_match ( smf, hmf, logmstar_min=5., logmstar_max=10., dm=0.1, smf_scale='log', hmf_scale='log' ):
+def abundance_match ( smf, hmf, logmstar_min=5., logmstar_max=10., dm=0.1, smf_scale='log', hmf_scale='linear' ):
     integration_grid = np.arange(5., 16.+dm/2., dm)
     logm_grid = np.arange(logmstar_min, logmstar_max+dm/2., dm)
     _,iup_smf = integrate_up_massfunction( smf, integration_grid, mf_scale=smf_scale )
     _,iup_hmf = integrate_up_massfunction( hmf, integration_grid, mf_scale=hmf_scale)
-    
+
     halo_masses_at_stellarmass = np.interp(iup_smf[::-1], iup_hmf[::-1], integration_grid[::-1])[::-1]
     mask = (integration_grid>logmstar_min)&(integration_grid<logmstar_max)
     return integration_grid[mask], halo_masses_at_stellarmass[mask]
