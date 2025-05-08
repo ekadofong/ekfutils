@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import correlate
+from scipy.integrate import fixed_quad
 from scipy.optimize import minimize, curve_fit
 from astropy.modeling.models import Sersic1D, Sersic2D, Const1D, Const2D
 from astropy.modeling.fitting import LevMarLSQFitter
@@ -438,7 +439,8 @@ class BaseInferer (object):
                 elif parameter > bounds[pidx][1]:
                     return -np.inf
             return 0.
-        self.logprior = logprior    
+        self.logprior = logprior 
+        self.has_intrinsic_dispersion = False   
         
     def set_bounds ( self, bounds ):   
         if hasattr ( self, 'ndim' ):
@@ -505,15 +507,18 @@ class BaseInferer (object):
             # \\
             # \\  Gelman and Rubin (1992) and Brooks and Gelman (1998) suggest that 
             # \\ diagnostic Rc values greater than 1.2 for any of the model parameters should indicate nonconvergence
-            print('Re-initializing walkers...')
+            if progress:
+                print('Re-initializing walkers...')
             fullchains = sampler.get_chain()
             chains = fullchains[(idx-1)*steps:]
             gr_statistic = sampling.gelmanrubin(fullchains)
+            if progress:
+                print(f'max(GR) = {max(gr_statistic):.3f}')
             if (gr_statistic < 1.2).all():
                 print('Convergence achieved')
                 idx = niter + 1
-            else:
-                print(f'max(GR) = {max(gr_statistic):.3f}')
+            else:                
+                
                 lp_est = np.median(chains,axis=(0,1))
                 std_chains = np.subtract(*np.nanquantile(chains,[0.6,.4], axis=(0,1),)) # \\ restrictive)
                 
@@ -560,9 +565,9 @@ class BaseInferer (object):
         prediction = self.predict ( x, *args )
         return prediction    
         
-    def plot_chain (self, labels=None, fsize=2):
+    def plot_chain (self, labels=None, fsize=2, truth=None):
         import matplotlib.pyplot as plt 
-        
+
         chain = self.sampler.get_chain ()
         
         fig, axarr = plt.subplots(self.sampler.ndim, 1, figsize=(10,fsize*self.sampler.ndim))
@@ -574,6 +579,9 @@ class BaseInferer (object):
             ax.axhline ( np.median(chain[:,:,aindex]), color='k')
             if labels is not None:
                 ax.set_ylabel(labels[aindex])
+            if truth is not None:
+                ax.axhline(truth[aindex], lw=2, color='r')
+            
                 
         return fig, axarr    
     
@@ -582,7 +590,25 @@ class BaseInferer (object):
         Set predict function, of form:
         self.predict ( data, *parameters )
         '''
-        self.predict = model_fn    
+        self.predict = model_fn   
+        
+        
+    def define_poissonpointprocess_likelihood ( self, rate_fn=None, domain=[-np.inf, np.inf], volume=1. ):
+        rate_fn = self.predict
+        def lnP(theta, data):
+            '''
+            Compute the log-likelihood of a weighted Poisson point process
+            
+            lnL = sum_i^N ( w_i * ln(f(x_i)) ) - \int f(x) dx
+            '''
+            x_values,weights = data
+            total_number = volume*fixed_quad(lambda x: rate_fn(x,*theta), *domain)[0] # total number or number density            
+            
+            expected_rates = weights*np.log(rate_fn(x_values, *theta))         
+
+            log_likelihood = np.sum(expected_rates) - total_number
+            return log_likelihood
+        return lnP
     
     def define_gaussianlikelihood (self, model_fn, with_intrinsic_dispersion=True, remove_nan=True ):
         if with_intrinsic_dispersion:
@@ -618,6 +644,7 @@ class BaseInferer (object):
             sigma2 = yerr**2 + intr_s**2 + xerr**2 # \\ XXX Check that this is right!!
 
             dev = (y - model) ** 2 / sigma2
+            
             eterm = np.log(2.*np.pi*sigma2)
             if remove_nan:
                 return -0.5 * np.nansum(  dev + eterm  ) 
@@ -673,11 +700,11 @@ class BaseInferer (object):
     
     def help ( self ):
         print('''
-sbmass_fit = fit.BaseInferer()
-sbmass_fit.set_predict ( lambda x, m, b: m*x + b  )
-lnP = sbmass_fit.define_gaussianlikelihood( sbmass_fit.predict, with_intrinsic_dispersion=True )
-sbmass_fit.set_loglikelihood(lnP)
-sbmass_fit.set_uniformprior([[-10.,0.],[10.,40.], [0.,10.]])      
+bi = fit.BaseInferer()
+bi.set_predict ( lambda x, m, b: m*x + b  )
+lnP = bi.define_gaussianlikelihood( bi.predict, with_intrinsic_dispersion=True )
+bi.set_loglikelihood(lnP)
+bi.set_uniformprior([[-10.,0.],[10.,40.], [0.,10.]])      
 
 data = (x,y,yerr,xerr=None)
               ''')
