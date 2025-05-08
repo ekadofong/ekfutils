@@ -433,6 +433,8 @@ def get_legacysurveyimage ( ra, dec, width=100, height=100, pixscale=0.13, layer
 to {file_name}''')
     with open(file_name, 'wb') as file:
         file.write(response.content)
+    
+    return file_name
         
 def load_gamacatalogs (gama_dir=None):
     '''
@@ -441,22 +443,26 @@ def load_gamacatalogs (gama_dir=None):
     if gama_dir is None:
         gama_dir = '/Users/kadofong/work/projects/gama/'
     gama = table.Table(fits.getdata(f'{gama_dir}local_data/SpecObjv27.fits', 1)).to_pandas().set_index("CATAID")
+    # \\ equatorial & G23 survey region masses
     gama_masses = table.Table(fits.getdata(f'{gama_dir}local_data/StellarMassesLambdarv24.fits', 1)).to_pandas().set_index("CATAID")
+    # \\ G02 stellar masses
+    g02_masses = table.Table(fits.getdata(f'{gama_dir}local_data/StellarMassesG02SDSSv24.fits', 1)).to_pandas().set_index("CATAID")
+    gama_masses = pd.concat([gama_masses, g02_masses])
     gama_lines = table.Table(fits.getdata(f'{gama_dir}local_data/GaussFitComplexv05.fits', 1)).to_pandas()#.set_index("CATAID")
     #gama_lines = gama_lines.loc[~gama_lines.index.duplicated()]
-    gama_phot = table.Table(fits.getdata(f'{gama_dir}local_data/ApMatchedCatv06.fits', 1)).to_pandas().set_index("CATAID")
+    gama_phot = table.Table(fits.getdata(f'{gama_dir}local_data/InputCatAv07.fits', 1)).to_pandas().set_index("CATAID")
     gama_phot = gama_phot.loc[~gama_phot.index.duplicated()]
     
     #\\photometry
-    gama_phot['r_mag'] = gama_phot['MAG_PETRO_r'] #-2.5*np.log10(gama_phot['r_flux']/3631.)
-    r_circ_pixel = gama_phot['PETRO_RADIUS'] * gama_phot['B_IMAGE']/gama_phot['A_IMAGE']
-    arcsec_per_pizel = 0.339 # arcsec / pixel, see final notes of https://www.gama-survey.org/dr4/schema/table.php?id=445
-    r_circ_arcsec = r_circ_pixel * arcsec_per_pizel
-    gama_phot['radius'] = r_circ_arcsec
-    gama_phot['sb_r'] = gama_phot['r_mag'] + 2.5*np.log10(2.*np.pi*gama_phot['radius']**2)
+    gama_phot['r_mag'] = gama_phot['PETROMAG_R'] #-2.5*np.log10(gama_phot['r_flux']/3631.)
+    #r_circ_pixel = gama_phot['PETRO_RADIUS'] * gama_phot['B_IMAGE']/gama_phot['A_IMAGE']
+    #arcsec_per_pizel = 0.339 # arcsec / pixel, see final notes of https://www.gama-survey.org/dr4/schema/table.php?id=445
+    #r_circ_arcsec = r_circ_pixel * arcsec_per_pizel
+    #gama_phot['radius'] = r_circ_arcsec
+    #gama_phot['sb_r'] = gama_phot['r_mag'] + 2.5*np.log10(2.*np.pi*gama_phot['radius']**2)
     
-    for band in 'griz':
-        gama_phot[f'{band}_flux'] = 10.**(gama_phot[f'MAG_PETRO_{band}']/-2.5) * 3631*1e9
+    for band in 'gri':
+        gama_phot[f'{band}_flux'] = 10.**(gama_phot[f'PETROMAG_{band.upper()}']/-2.5) * 3631*1e9
 
     catalog = gama.join(gama_masses[['logmstar','dellogmstar','absmag_g','absmag_r']])\
         .reset_index().merge(gama_lines[['SPECID',
@@ -465,7 +471,17 @@ def load_gamacatalogs (gama_dir=None):
                            'NIIB_FLUX','NIIB_FLUX_ERR',
                            'NIIR_FLUX','NIIR_FLUX_ERR',
                            ]], on='SPECID').set_index('CATAID')\
-            .join(gama_phot[['g_flux','r_flux','i_flux','r_mag','radius','sb_r']])
+            .join(gama_phot[['g_flux','r_flux','i_flux','r_mag']]) # 'radius','sb_r'
+            
+    survey_recode = np.zeros(catalog.shape[0])
+    survey_recode[catalog['SURVEY_CODE']==1] = 1
+    survey_recode[catalog['SURVEY_CODE']==5] = 2     
+    
+    catalog['is_flux_calibrated'] = False
+    catalog.loc[survey_recode>0,'is_flux_calibrated'] = True
+    
+    catalog = catalog.query("NQ>2")
+           
     return catalog
 
 def load_sdsscatalogs (sdss_dir=None, zmax=0.05, use_scratch=True):
@@ -527,17 +543,19 @@ def match_catalogs (
         catB, 
         radius=3.*u.arcsec,
         coordkeysA = ['RA','DEC'],
-        coordkeysB = ['RA','DEC']
+        coordkeysB = ['RA','DEC'],
+        unitsA = ['deg','deg'],
+        unitsB = ['deg','deg']
     ):
     catA_coords = coordinates.SkyCoord(
         catA[coordkeysA[0]].values,
         catA[coordkeysA[1]].values,
-        unit='deg'
+        unit=unitsA
     )
     catB_coords = coordinates.SkyCoord(
         catB[coordkeysB[0]].values,
         catB[coordkeysB[1]].values,
-        unit='deg'
+        unit=unitsB
     )
     
     catB_correspondence, d2d, _ = catA_coords.match_to_catalog_sky(catB_coords)

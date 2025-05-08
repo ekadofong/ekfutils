@@ -1,4 +1,5 @@
 import os
+import copy
 
 class BatchEmail (object):
     def __init__ (self, template, savedir=None):#'/scratch/emails/'):
@@ -11,10 +12,13 @@ class BatchEmail (object):
         if not os.path.exists(savedir):
             os.makedirs ( savedir )
         
-    def address ( self, subject, email ): #firstname, lastname,
-        #body = self.template.replace("FIRSTNAME", firstname)
-        #body = body.replace("LASTNAME", lastname)
-        body = self.template.replace("RECIPIENTADDRESS", email)
+    def address ( self, subject, email, firstname=None, lastname=None ): #firstname, lastname,
+        body = copy.copy(self.template)
+        if firstname is not None:            
+            body = body.replace("FIRSTNAME", firstname)
+        if lastname is not None:
+            body = body.replace("LASTNAME", lastname)
+        body = body.replace("RECIPIENTADDRESS", email)
         body = body.replace("EMAILTITLE", subject)
         return body
 

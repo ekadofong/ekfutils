@@ -254,14 +254,16 @@ def dynamic_upsample ( x, p, N=100 ):
     return cx, p(cx)
 
 def bootstrap_metric ( x, metric_fn, u_x=None, npull=1000, err_type='1684', quantiles=None, vartype='linear', verbose=True):
-    if err_type == '1684_combined':
+    if not isinstance(err_type, str):
+        efunc = err_type
+    elif err_type == '1684_combined':
         efunc = lambda foo: np.subtract(*np.quantile(foo, [0.84, 0.16]))
     elif err_type == '1684':
         efunc = lambda foo: np.quantile(foo, [0.16, 0.84])
     elif err_type == '0595':
         efunc = lambda foo: np.quantile(foo, [0.05,0.95])        
     elif err_type == 'std':
-        efunc = lambda foo: np.std(foo)
+        efunc = np.std
     elif err_type == 'quantiles':
         efunc = lambda foo: np.quantile(foo, quantiles)
         
@@ -411,11 +413,72 @@ gaussian = functions.gaussian
 def midpts ( bins ):
     return 0.5*(bins[1:]+bins[:-1])
 
+def running_metric (x, y,metric_fn, midpts, dx=None, xerr=None, yerr=None, erronmetric=False, nresamp=100, return_counts=False ):    
+    if dx is None:
+        dx = np.ones(midpts.size)*np.median(np.diff(midpts))*0.75
+    elif isinstance(dx, float) or isinstance(dx, int):
+        dx = np.ones(midpts.size)*dx
+        
+        
+    if isinstance(midpts, int):
+        midpts = np.linspace(x.min(),x.max(),midpts)
+    if erronmetric:
+        ystats = np.zeros([midpts.size, 1, 5])
+    else:
+        ystats = np.zeros([midpts.size, 1])    
+    if return_counts:
+        counts = np.zeros(midpts.shape[0], dtype=int)
+        
+
+    if not erronmetric:
+        nresamp = 1 
+
+    carr = np.zeros([nresamp, len(midpts), 1])       
+    for rindex in range(nresamp):
+        choice = np.random.choice(x.size, x.size, replace=True)
+        
+        # \\ resample from uncertainties assuming Gaussian, if applicable
+        if not erronmetric:
+            xpull = x # \\ if no err estimate just use the sample
+        elif xerr is not None:
+            xpull = np.random.normal(x[choice], xerr)
+        else:
+            xpull = x[choice]
+        
+        if not erronmetric:
+            ypull = y
+        elif yerr is not None:
+            ypull = np.random.normal(y[choice], yerr)
+        else:
+            ypull = y[choice]
+            
+        for idx in range(midpts.size):
+            xmin = midpts[idx] - dx[idx]
+            xmax = midpts[idx] + dx[idx]
+            mask = (xpull>=xmin)&(xpull<xmax)
+
+            outcome = metric_fn ( ypull[mask] )
+            if erronmetric:
+                carr[rindex,idx] = outcome
+            else:
+                ystats[idx] = outcome
+    
+    # \\ if we did error estimation, summary stats for that estimation
+    if erronmetric:
+        #ystats = np.nanquantile(carr, [0.025,.16,.5,.84,.95], axis=0).T.reshape(len(midpts),len(qt),5)
+        ystats = np.zeros([len(midpts), 1, 5])
+        for ix,eqt in enumerate([0.025,.16,.5,.84,.95]):
+            ystats[:,:,ix] = np.nanquantile(carr, eqt, axis=0)
+    return midpts, ystats, dx
+
 def running_quantile (x, y, midpts, dx=None, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100, return_counts=False ):
     if isinstance(qt, float):
         qt = [qt]    
     if dx is None:
-        dx = np.median(np.diff(midpts))*0.75
+        dx = np.ones(midpts.size)*np.median(np.diff(midpts))*0.75
+    elif isinstance(dx, float) or isinstance(dx, int):
+        dx = np.ones(midpts.size)*dx
+        
         
     if isinstance(midpts, int):
         midpts = np.linspace(x.min(),x.max(),midpts)
@@ -450,8 +513,8 @@ def running_quantile (x, y, midpts, dx=None, xerr=None, yerr=None, qt=0.5, erron
             ypull = y[choice]
             
         for idx in range(midpts.size):
-            xmin = midpts[idx] - dx
-            xmax = midpts[idx] + dx
+            xmin = midpts[idx] - dx[idx]
+            xmax = midpts[idx] + dx[idx]
             mask = (xpull>=xmin)&(xpull<xmax)
 
             outcome = np.nanquantile ( ypull[mask], qt )
@@ -468,7 +531,44 @@ def running_quantile (x, y, midpts, dx=None, xerr=None, yerr=None, qt=0.5, erron
             ystats[:,:,ix] = np.nanquantile(carr, eqt, axis=0)
     return midpts, ystats, dx
 
+def binned_metric ( x, y, metric_fn, bins, xerr=None, yerr=None, erronmetric=False, nresamp=100, return_counts=False ):
+    if isinstance(bins, int):
+        bins = np.linspace( np.nanmin(x), np.nanmax(x), bins )
 
+    assns = np.digitize ( x, bins )    
+    
+    xmid = midpts ( bins )
+    if erronmetric:
+        ystats = np.zeros([xmid.size, 1, 5])
+    else:
+        ystats = np.zeros([xmid.size, 1])
+        
+    if return_counts:
+        counts = np.zeros(xmid.shape[0], dtype=int)
+    
+    for idx in range(1, bins.size):
+        if return_counts:
+            counts[idx-1] = (assns==idx).sum()        
+        if erronmetric:
+            carr = np.zeros([nresamp, 1])
+            indices = np.arange(y.size)[assns==idx] 
+            for jdx in range(nresamp):                                                               
+                if yerr is not None:                    
+                    pull_indices = np.random.choice ( indices, indices.size, replace=True  )                    
+                    u_pull = yerr[pull_indices]
+                    m_pull = y[pull_indices]
+                    pull = np.random.normal(m_pull, u_pull)
+                else:
+                    pull = np.random.choice ( y[assns==idx], size=(assns==idx).sum(), replace=True )
+                pulled_ys = metric_fn ( pull )
+                carr[jdx] = pulled_ys
+            ystats[idx-1] = np.nanquantile(carr,[0.025,.16,.5,.84,.95], axis=0).T
+        else:
+            ystats[idx-1] = metric_fn ( y[assns==idx] )
+            
+    if return_counts:
+        return xmid, ystats, counts
+    return xmid, ystats
 
 def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100, return_counts=False ):
     if isinstance(bins, int):
@@ -510,6 +610,41 @@ def binned_quantile ( x, y, bins, xerr=None, yerr=None, qt=0.5, erronqt=False, n
         return xmid, ystats, counts
     return xmid, ystats
 
+
+def metric_against_orthogonalproj ( x, y, metric_fn, bins, return_proj=False, aggregation_mode = 'running', **kwargs ):
+    '''
+    Bin against the 
+    '''
+    ell = y-x
+    xc = x + ell/2.
+    d = ell/np.sqrt(2.)    
+    
+    if aggregation_mode == 'running':
+        xcmid, qt, dxc = running_metric(
+            xc,            
+            d,
+            metric_fn,
+            midpts(bins),
+            **kwargs,        
+        )   
+    elif aggregation_mode == 'binned':
+        xcmid, qt = binned_metric(
+            xc,
+            d,
+            metric_fn,
+            bins,
+            **kwargs,        
+        )           
+    
+    if return_proj:
+        if aggregation_mode=='running':
+            return xcmid, qt, dxc
+        return xcmid, qt
+    else:
+        xp = xcmid
+        yp = (xcmid + qt.T/np.sqrt(2.)).T        
+        return xp, yp, dxc
+    
 def quantiles_against_orthogonalproj ( x, y, bins, return_proj=False, aggregation_mode = 'running', **kwargs ):
     '''
     Bin against the 

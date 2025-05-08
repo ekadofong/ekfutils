@@ -25,13 +25,14 @@ def convert_label_to_log ( label, single_spaced=True ):
     else:
         unit = unit.strip().strip('$')
     if single_spaced:
-        return r'$\log_{10}(%s/%s)$' % (name, unit)
+        return r'$\log_{10}(%s/[%s])$' % (name, unit)
     else:
         return r'$\log_{10}\left(\frac{%s}{%s}\right)$' % (name, unit)
 
 common_labels = {
     'mstar':r'${\rm M}_\bigstar$ [${\rm M}_\odot$]',                                    # \\ stellar mass
     'mhalo':r'${\rm M}_{\rm halo}$ [${\rm M}_\odot$]',                                  # \\ halo mass
+    'mpeak':r'${\rm M}_{\rm peak}$ [${\rm M}_\odot$]',
     'mhi':r'${\rm M}_{\rm HI}$ [${\rm M}_\odot$]',                                      # \\ HI mass
     'm200':r'${\rm M}_{200}$ [${\rm M}_\odot$]',                                        # \\ M200c
     'sfr':r'${\rm SFR}$ [$\rm M_\odot\ {\rm yr}^{-1}$]',                            # \\ SFR
@@ -41,6 +42,7 @@ common_labels = {
     'fhi':r'$f_{\rm HI}$',                                                  # \\ HI gas fraction
     'haew':r'$\rm EW_{\rm H\alpha}$ [$\rm \AA$]',                           # \\ Halpha EW
     'halum':r'${\rm L}({\rm H\alpha})$ [$\rm erg\ s^{-1}$]',                           # \\ Halpha luminosity
+    'haflux':r'${\rm F_{H\alpha}}$ [$\rm erg\ s^{-1}\ cm^{-2}$]',
     'fuvlum':r'${\rm L}_\nu({\rm FUV})$ [erg s$^{-1}$ Hz$^{-1}$]',                     # \\ FUV spectral luminosity
     'tdep':r'$t_{\rm dep}$ [Gyr]',                                          # \\ depletion time
     'logtdep':r'$\log_{10}(t_{\rm dep}/[\rm Gyr])$',                        # \\ log10 of depletion time
@@ -55,6 +57,9 @@ common_labels = {
     'iqr':lambda x: r'$\langle %s \rangle_{84} - \langle %s \rangle_{16}$' % (x,x),  
                                                                             # \\ Inner ``quantile'' range
     'av':r'${\rm A}_V$',                                                          # \\ Optical extinction
+    'smf':r'$dn/d(\log_{10}({\rm M}_\bigstar/{\rm M}_\odot))$',
+    'hmf':r'$dn/d(\log_{10}({\rm M}/{\rm M}_\odot))$',
+    'sb_r':r'$\mu_{r,\rm eff}$ [mag arcsec$^{-2}$]'
 }
     
 common_labels['logmstar'] = convert_label_to_log(common_labels['mstar'])
@@ -206,8 +211,8 @@ def hist (
                 lw = 1.
             # \\ add white outline around hist step
             outline_kwargs = kwargs.copy()
-            if 'color' in kwargs.keys():                
-                outline_kwargs['color'] = 'w'
+            #if 'color' in kwargs.keys():                
+            outline_kwargs['color'] = 'w'
             if 'ls' in outline_kwargs.keys():
                 outline_kwargs['ls'] = '-'
             
@@ -216,7 +221,39 @@ def hist (
         else:
             if lw is None:
                 lw = 1
-            imhist = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, lw=lw, label=label, weights=weights, **kwargs) 
+            
+            if lw > 1:
+                imhist = ax.hist (x, bins, histtype='step', orientation=orientation, density=density, lw=lw, weights=weights, **kwargs)                 
+                
+                if 'facecolor' in kwargs.keys():
+                    facecolor = kwargs['facecolor']
+                    edgecolor = kwargs['color']
+                    kwargs['color'] = kwargs['facecolor']                    
+                elif ('color' not in kwargs.keys()):
+                    color = im.patches[0].get_facecolor()
+                    color = (color[0], color[1], color[2], 1.)   
+                    facecolor = ec.ColorBase(color).modulate(0.3).base                    
+                    kwargs['color'] = ec.ColorBase(color).modulate(0.3).base                 
+                else:                    
+                    edgecolor = kwargs['color']                    
+                    color = kwargs['color']                    
+                    kwargs['color'] = ec.ColorBase(color).modulate(0.3).base   
+                    facecolor = kwargs['color']                     
+                _,_,im = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, weights=weights, **kwargs)
+
+                rect = patches.Rectangle(
+                                (0.,0.), 
+                                0., 
+                                0., 
+                                facecolor=facecolor, 
+                                edgecolor=edgecolor,
+                                lw=lw,
+                                label=label
+                            )
+                ax.add_patch(rect)   
+         
+            else:
+                imhist = ax.hist (x, bins, histtype=histtype, orientation=orientation, density=density, alpha=alpha, lw=lw, label=label, weights=weights, **kwargs) 
     
     if bintype == 'log':
         ax.set_xscale('log')
@@ -762,7 +799,8 @@ def running_quantile ( x,
         elif aggregation_mode=='running':
             if show_counts:
                 raise NotImplementedError
-            out = sampling.running_quantile ( x, y, midpts=bins, qt=qt, erronqt=erronqt, xerr=xerr, yerr=yerr, dx=dx)
+            
+            out = sampling.running_quantile ( x, y, midpts=midpoints(bins), qt=qt, erronqt=erronqt, xerr=xerr, yerr=yerr, dx=dx)
     elif against == 'orthogonal':
         out = sampling.quantiles_against_orthogonalproj(x, y, bins, aggregation_mode=aggregation_mode,
                                                         qt=qt, erronqt=erronqt, xerr=xerr, yerr=yerr, dx=dx)
@@ -777,9 +815,10 @@ def running_quantile ( x,
             xlow = bins[:-1]
             xhigh = bins[1:]
         elif aggregation_mode=='running':
+            midpts = midpoints(bins)
             xmid,ystat,dx = out
-            xlow = bins - dx
-            xhigh = bins+dx 
+            xlow = midpts - dx
+            xhigh = midpts+dx 
     
     if erronqt:
         if err_format == 'errorbar':
@@ -1135,7 +1174,8 @@ def histstack (
                 linewidth=1, 
                 stretch=1.2,
                 color_by_count=True,
-                label=None,                            
+                label=None, 
+                type='histogram'                                          
                 ):
     if ax is None:
         ax = plt.subplot(111)
@@ -1195,11 +1235,11 @@ def histstack (
         cfacecolor = ec.ColorBase(cfacecolor).modulate(fc_modulate)
         cquantilecolor = ec.ColorBase(cquantilecolor).modulate(ec_modulate)
             
-        out = ax.step(
+        out = ax.plot(
             ys - shift, 
             ybins[1:], 
             color=cedgecolor.base,
-            where='pre', 
+            #where='pre', 
             zorder=zidx/(len(xbins)-1.),
             linewidth=linewidth
         )
@@ -1225,7 +1265,7 @@ def histstack (
                     show_label = True
                 else:
                     show_label = False
-                
+                                
                 ax.hlines(
                     qvs,
                     base-shift,

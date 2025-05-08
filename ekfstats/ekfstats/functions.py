@@ -37,6 +37,11 @@ def logschechter ( m, phi_ast, M_ast, alpha ):
     nd = np.log(10.)*phi_ast *(m/M_ast)**(alpha+1.)*np.e**(-m/M_ast)
     return nd
 
+def logschechter_mag ( m, phi_ast, M_ast, alpha ):
+    # \\ magnitude version from Loveday+11
+    nd = 0.4*np.log(10.)*phi_ast*(10.**(0.4*(M_ast - m)))**(1.+alpha)*np.exp(-10.**(0.4*(M_ast-m)))    
+    return nd
+
 def logschechter_alog ( logm, phi_ast, logM_ast, alpha ):
     '''                                                                         
     phi(log_10{M}) = dN/d(log_10{M})                                            
