@@ -133,3 +133,4 @@ dmypy.json
 .DS_Store
 .vscode/settings.json
 ekfplot/ekfplot/.vscode/settings.json
+ekfnotion/

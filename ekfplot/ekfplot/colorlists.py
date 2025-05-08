@@ -48,6 +48,16 @@ slides = {
     'blue':'#4BB8CD'
 }
 
+merian = {
+    'bold':'#14a9e3',
+    'darkbold':'#005678',
+    'shark':'#3d3736',
+    'grey':'#6e6765',
+    'dim':'#c9765b',
+    'darkdim':'#80665d',
+    'highlight':'#e64100'
+}
+
 def display_colorlist (clist):
     xs = np.arange(0,len(clist))
     keys = list(clist.keys())
