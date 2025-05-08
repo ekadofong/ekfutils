@@ -59,7 +59,21 @@ def LNUV2SFR_IP ( lnuv ):
     '''
     Following Eq. 3 of Iglesias-Paramo 2006, corrected for Kroupa IMF
     '''
+    
     return lnuv/(10.**9.33) * 0.66
+
+def fnu_to_flambda ( fnu, wv ):
+    # \\ lambda Flambda = nu Fnu
+    # \\ Flambda = nu/lambda Fnu
+    # \\ lambda * nu = c
+    # \\ nu = c/lambda
+    # \\ Flambda = c/lambda^2 * Fnu
+    # \\ Flambda * lambda^2 / c = Fnu
+    
+    return co.c / wv**2 * fnu
+
+def flambda_to_fnu ( flambda, wv ):
+    return wv**2 / co.c * fnu
 
 def SFR_UV2Ha ( logsfr_uv, conversion='lee09'):
     '''
