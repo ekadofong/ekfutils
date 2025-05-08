@@ -4,6 +4,7 @@ from astropy import units as u
 from astropy.io import fits
 from astropy import constants as co
 from astropy.modeling.physical_models import BlackBody
+import healpy as hp
 from .calc_kcor import calc_kcor
 
 def gecorrection(wave, AvorEBV, Rv=3.1, unit='AA', etype='AV', return_magcorr=False):
@@ -217,3 +218,41 @@ class SolarReference ():
         truesun = photometry_from_spectrum(self.spectrum.data['WAVE']*u.AA, fnu, filter_file=filter_file )
         truesun *= 4.*np.pi*(u.AU).to(u.cm)**2
         return truesun
+
+
+def estimate_sky_footprint(ra_deg, dec_deg, nside=128, plot=True):
+    """
+    NOT RELIABLE
+
+    Parameters
+    ----------
+    ra_deg : array-like
+        Right Ascension in degrees.
+    dec_deg : array-like
+        Declination in degrees.
+    nside : int
+        HEALPix resolution parameter. Higher values give better spatial resolution.
+    plot : bool
+        Whether to plot the resulting footprint.
+
+    Returns
+    -------
+    footprint_mask : np.ndarray
+        Boolean array of shape (12 * nside^2,) with True for observed pixels.
+    """
+    # Convert RA, Dec to theta, phi (in radians)
+    theta = np.radians(90.0 - dec_deg)  # colatitude
+    phi = np.radians(ra_deg)
+
+    # Get HEALPix pixel indices
+    pix = hp.ang2pix(nside, theta, phi, nest=False)
+
+    # Create mask
+    npix = hp.nside2npix(nside)
+    footprint_mask = np.zeros(npix, dtype=bool)
+    footprint_mask[np.unique(pix)] = True
+
+    if plot:
+        hp.mollview(footprint_mask.astype(float), title="Estimated Survey Footprint", cmap='cividis')
+
+    return footprint_mask
