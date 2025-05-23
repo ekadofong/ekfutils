@@ -340,7 +340,6 @@ def hist2d (
         show_proj=False,
         figsize=None,
         cmap = 'Greys',
-        proj_color=None,
         proj_kwargs=None,
         **kwargs
     ):    
@@ -389,18 +388,21 @@ def hist2d (
     ax.set_yscale(yscale)
     
     if show_proj:
-        if proj_color is None:            
+        if proj_kwargs is None:
+            proj_kwargs = {}
+            
+        if 'color' not in proj_kwargs.keys():
             if isinstance(cmap, str):
                 cm = getattr(plt.cm, cmap)
             else:
                 cm = cmap
             proj_color = cm ( 0.3 )
-        if proj_kwargs is None:
-            proj_kwargs = {}
+            proj_kwargs['color'] = color
+
         
-        axarr[1].hist ( x, bins=bins[0], color=proj_color, **proj_kwargs) 
+        hist ( x, bins=bins[0], ax=axarr[1], **proj_kwargs) 
         axarr[1].set_xlim(ax.get_xlim())
-        axarr[2].hist ( y, bins=bins[1], orientation='horizontal', color=proj_color, **proj_kwargs)
+        hist ( y, bins=bins[1], orientation='horizontal', ax=axarr[2], **proj_kwargs)
         axarr[2].set_ylim(ax.get_ylim())
         
         # \\ remove 0 that often clashes with main axes
