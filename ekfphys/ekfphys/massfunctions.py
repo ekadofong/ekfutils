@@ -1,8 +1,8 @@
 
 import numpy as np
 from scipy import integrate
-
-from ekfstats import sampling
+from scipy.interpolate import BSpline
+from ekfstats import sampling, fit, functions
 
 def integrate_up_massfunction ( mf, logm_grid, integration_type='quad', mf_scale='log' ):
     """
@@ -101,3 +101,58 @@ def abundance_match ( smf, hmf, logmstar_min=5., logmstar_max=10., dm=0.1, smf_s
     halo_masses_at_stellarmass = np.interp(iup_smf[::-1], iup_hmf[::-1], integration_grid[::-1])[::-1]
     mask = (integration_grid>logmstar_min)&(integration_grid<logmstar_max)
     return integration_grid[mask], halo_masses_at_stellarmass[mask]
+
+def abundance_match_withscatter (hmf, shmr_form ='powerlaw', scatter_form='lognormal_constant', logmstar_min=5., logmstar_max=11.):
+    if shmr_form == 'powerlaw':
+        shmr_fn = lambda logmstar, coeffs: coeffs[0]*logmstar + coeffs[1]
+        shmr_derivative = lambda logmstar, coeffs: coeffs[0]
+        n_coeffs = 2
+    elif shmr_form == 'bspline':        
+        degree = 3 # Cubic
+        n_segments = 4 
+        n_coeffs = n_segments + degree
+        knots = np.concatenate([
+            np.full(degree, logmstar_min),                          # k repeated starting knots
+            np.linspace(logmstar_min, logmstar_max, n_segments + 1),             # s+1 total "break points"
+            np.full(degree, logmstar_max)                            # k repeated ending knots
+        ]) # n_segments + 2*degree + 1
+                
+        shmr_fn = lambda logmstar, *coeffs: BSpline(knots, coeffs, degree)(logmstar)
+        shmr_derivative = lambda logmstar, *coeffs: BSpline(knots, coeffs, degree).derivative(1)(logmstar)
+    else:
+        raise NotImplementedError
+
+    if scatter_form == 'lognormal_constant':
+        n_coeffs_scatter = 1
+        pdf = lambda x, logmstar, sig: functions.gaussian(x, 'normalize', logmstar, sig )
+    elif scatter_form == 'None':
+        n_coeffs_scatter = 0
+        pdf = None
+    else:
+        raise NotImplementedError
+    
+    logms_grid = np.linspace(logmstar_min, logmstar_max, 300).reshape(-1,1)
+    def smf_predict ( logmstar, *coeffs ):        
+        if (pdf is None) or (coeffs[-1] < 0.01):
+            smf_prediction = hmf(shmr_fn(logmstar, coeffs))*shmr_derivative(logmstar, coeffs)
+        else:
+            fn = lambda x, coeffs: hmf(shmr_fn(logms_grid, coeffs[:n_coeffs]))\
+                    *shmr_derivative(logms_grid, coeffs[:n_coeffs])\
+                    *pdf(x, logms_grid, *coeffs[n_coeffs:])
+            
+            smf_prediction = np.trapz(
+                fn(logmstar.reshape(1,-1), coeffs),
+                logms_grid,
+                axis=0
+            )
+            
+        return np.log10(smf_prediction)
+
+
+    #smf_predict = lambda x, *coeffs: integrate.quad(
+    #    lambda logmstar: hmf(shmr_fn(logmstar, coeffs[:n_coeffs]))*shmr_derivative(logmstar,coeffs[:n_coeffs])*pdf(x, logmstar, *coeffs[n_coeffs:]),
+    #    logmstar_min,
+    #    logmstar_max
+    #)[0]
+    
+    return smf_predict
