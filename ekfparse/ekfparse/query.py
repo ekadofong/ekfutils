@@ -202,9 +202,13 @@ def get_galexobs ( ra, dec, radius=None ):
     #topull = dproducts[dproducts['productGroupDescription'] == 'Minimum Recommended Products']
     return dproducts, (fuv_name, nuv_name)
 
+def hotfix_galex_naming ( obsid ):
+    if 'AIS' in obsid:
+        parts = obsid.split('_')        
+        obsid = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)     
+    return obsid
 
-
-def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=True, **kwargs):
+def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=True, sparse_download=True, obsout=None, **kwargs):
     """
     Download GALEX observations for a single target.
 
@@ -218,21 +222,47 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=Tr
     Returns:
         tuple: A tuple containing the exit status (0 if successful, 1 otherwise) and a message.
 
-    """    
+    """        
     if savedir is None:
         savedir = f'{os.environ["HOME"]}/Downloads/'
-    if subdirs and os.path.exists(f'{savedir}/{name}/'):
-        return 0, "Already run", None
+    #if subdirs and os.path.exists(f'{savedir}/{name}/'):
+    #    return 0, "Already run", None
     
     start = time.time ()
-    topull, names = get_galexobs ( ra, dec, **kwargs )
+    if obsout is None:        
+        topull, names = get_galexobs ( ra, dec, **kwargs )
+    else:
+        topull, names = obsout
+    if sparse_download:
+        # \\ AIS filename fix
+        anames = [ hotfix_galex_naming(_name) for _name in names ]
+                                
+        do_pull = np.full(len(topull), False)
+        downloaded_images = [ os.path.basename(x) for x in glob.glob(f'{savedir}/{name}/*') ]
+        already_downloaded = np.in1d(topull['productFilename'], downloaded_images)
+        for _ in range(len(topull)):                        
+            is_from_best = False # \\ only pull products from deepest available observations
+            is_downloaded = False # \\ do not re-download products
+            
+            product_filename = topull[_]['productFilename']
+            for _name in anames:
+                if _name in product_filename:
+                    is_from_best = True
+            
+            do_pull[_] = is_from_best
+                    
+        topull = topull[do_pull&~already_downloaded]
+
     if verbose:
         print(f'Identified GALEX observations in {time.time() - start:.2f} seconds.')
         start = time.time ()
-        
+
     if topull is None:
         print(f'No Galex observations found for {name}')
         return 1, f'No Galex observations found for {name}', None
+    elif len(topull) == 0:
+        print(f'All observations already downloaded for {name}')
+        return 2, f'All observations already downloaded for {name}', None
     
     if subdirs:
         target = f'{savedir}/{name}/'
@@ -240,10 +270,14 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=Tr
         target = f'{savedir}/'
     if not os.path.exists(target):
         os.makedirs(target)
-        
-    open(f'{target}/keys.txt','w').write(f'''FUV,{names[0]}
-NUV,{names[1]}''')    
+    
+    with  open(f'{target}/keys.txt','w') as f:
+        f.write(f'''FUV,{names[0]}
+NUV,{names[1]}''')
+            
     manifest = Observations.download_products(topull, download_dir=target, mrp_only=True, cache=False )
+    if manifest is None:
+        return 2, "Nothing to download!", None
     if verbose:
         print(f'Downloaded GALEX observations in {time.time() - start:.2f} seconds.')
         start = time.time ()    
@@ -259,7 +293,7 @@ NUV,{names[1]}''')
     return 0, manifest, names
 
 
-def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names=False, fits_names=None, subdirs=True, clean=False):
+def load_galexcutouts ( name, datadir, center=None, sw=60, sh=60, verbose=True, infer_names=False, fits_names=None, subdirs=True, clean=False):
     """
     Load locally saved GALEX cutouts and package as a minimal FITS for a target.
 
@@ -268,8 +302,8 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         datadir: str - Directory containing the GALEX data.
         center: tuple or astropy.coordinates.SkyCoord - Center coordinates for the cutout, either as pixel coordinates 
                 (tuple) or as RA/DEC (astropy.coordinates.SkyCoord).
-        sw: int - Width of the cutout.
-        sh: int - Height of the cutout.
+        sw: int - Width of the cutout on the sky (arcsec).
+        sh: int - Height of the cutout on the sky (arcsec).
         verbose: bool - Whether to display verbose information (default is True).
         infer_names: bool - Whether to infer the names of the cutouts if keys.txt is not present (default is False).
         fits_names: dict, list, tuple, or None - FITS names provided directly (default is None).
@@ -373,12 +407,22 @@ def load_galexcutouts ( name, datadir, center, sw, sh, verbose=True, infer_names
         cts = intmap[0].data * rrhr[0].data      
         variance = fits.ImageHDU ( cts / rrhr[0].data**2, header=intmap[0].header, name='VARIANCE' )
         
-        intmap_cutout = Cutout2D( data=intmap[0].data, position=center, size=[sh,sw], wcs=cutout_wcs )
-        intmap_hdu = fits.PrimaryHDU ( data=intmap_cutout.data, header=intmap_cutout.wcs.to_header(),)
-        variance_cutout = Cutout2D ( variance.data, position=center, size=[sh,sw], wcs=cutout_wcs )
-        variance_hdu = fits.ImageHDU ( data=variance_cutout.data, header=variance_cutout.wcs.to_header(), name='VARIANCE')
-        skybg_cutout = Cutout2D ( skybg.data, position=center, size=[sh,sw], wcs=cutout_wcs )
-        skybg_hdu = fits.ImageHDU ( data=skybg_cutout.data, header=skybg_cutout.wcs.to_header(), name='SKYBG')
+        if center is None:
+            if verbose:
+                print('[query.load_galexcutouts] returning full cutout')
+            intmap_hdu = intmap[0]
+            variance_hdu = variance
+            skybg_hdu = skybg
+        else:
+            if isinstance(center, tuple):
+                print('[query.load_galexcutouts] `center` given as tuple; assuming pixel values')
+            intmap_cutout = Cutout2D( data=intmap[0].data, position=center, size=[sh,sw], wcs=cutout_wcs )
+            variance_cutout = Cutout2D ( variance.data, position=center, size=[sh,sw], wcs=cutout_wcs )
+            skybg_cutout = Cutout2D ( skybg.data, position=center, size=[sh,sw], wcs=cutout_wcs )
+            
+            intmap_hdu = fits.PrimaryHDU ( data=intmap_cutout.data, header=intmap_cutout.wcs.to_header(),)    
+            variance_hdu = fits.ImageHDU ( data=variance_cutout.data, header=variance_cutout.wcs.to_header(), name='VARIANCE')        
+            skybg_hdu = fits.ImageHDU ( data=skybg_cutout.data, header=skybg_cutout.wcs.to_header(), name='SKYBG')
         
         #new_wcs = intmap_cutout.wcs.to_header ()
         #intmap[0].data = intmap_cutout
@@ -464,7 +508,7 @@ def load_gamacatalogs (gama_dir=None):
     for band in 'gri':
         gama_phot[f'{band}_flux'] = 10.**(gama_phot[f'PETROMAG_{band.upper()}']/-2.5) * 3631*1e9
 
-    catalog = gama.join(gama_masses[['logmstar','dellogmstar','absmag_g','absmag_r']])\
+    catalog = gama.join(gama_masses[['logmstar','dellogmstar','logage','dellogage','absmag_g','absmag_r']])\
         .reset_index().merge(gama_lines[['SPECID',
                            'HA_FLUX','HA_FLUX_ERR','HA_EW','HA_EW_ERR',
                            'HB_EW','HB_EW_ERR',
