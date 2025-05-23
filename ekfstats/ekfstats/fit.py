@@ -237,18 +237,21 @@ class BaseInferer (object):
         prediction = self.predict ( x, *args )
         return prediction    
         
-    def plot_chain (self, labels=None, fsize=2, truth=None):
+    def plot_chain (self, labels=None, fsize=2, truth=None, discard=0):
         import matplotlib.pyplot as plt 
 
-        chain = self.sampler.get_chain ()
+        chain = self.sampler.get_chain (discard=discard)
         
         fig, axarr = plt.subplots(self.sampler.ndim, 1, figsize=(10,fsize*self.sampler.ndim))
         if self.ndim == 1:
             axarr = [axarr]
         for aindex, ax in enumerate(axarr):
             for windex in range(self.sampler.nwalkers):
-                ax.plot ( chain[:, windex, aindex], color='lightgrey', alpha=0.3)     
-            ax.axhline ( np.median(chain[:,:,aindex]), color='k')
+                ax.plot ( chain[:, windex, aindex], color='lightgrey', alpha=0.1)     
+            ax.axhline ( np.median(chain[:,:,aindex]), color='tab:blue', lw=2)
+            for qt in [0.16,.84]:
+                ax.axhline ( np.quantile(chain[:,:,aindex], qt), color='tab:blue', ls='--', lw=0.5)
+            ax.axhspan ( *np.quantile(chain[:,:,aindex], [0.16,.84]),  color='tab:blue', alpha=0.2)
             if labels is not None:
                 ax.set_ylabel(labels[aindex])
             if truth is not None:
@@ -542,8 +545,9 @@ def logistic_fn ( var, a, mu, s, floor ):
     return pq
 
 def logistic_loglikelihood ( theta, data ):
-    var,labels = data
-    a, mu, s, floor = theta
-    pq = a / (1. + np.exp(-(var-mu)/s) ) + floor
-    lnP = np.sum(np.where(labels==1, np.log(pq), np.log(1.-pq)))
+    var,labels,weights = data
+    #a, mu, s, floor = theta
+    #pq = a / (1. + np.exp(-(var-mu)/s) ) + floor
+    pq = logistic_fn(var, *theta)
+    lnP = np.sum(weights*np.where(labels==1, np.log(pq), np.log(1.-pq)))
     return lnP   

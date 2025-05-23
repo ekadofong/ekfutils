@@ -300,6 +300,48 @@ def poissonian_histsample ( r, bins=10, size=2000, **kwargs ):
     return sample,  midpts(bin_edges)
     
 def gamma_histcounts (r, bins=10, ci=0.68, weights=None, return_generator=False, weight_fn=None, **kwargs):
+    """
+    Compute weighted histogram counts with confidence intervals using a Gamma approximation to Poisson statistics.
+
+    Parameters
+    ----------
+    r : array_like
+        Input data to be histogrammed.
+    bins : int or sequence of scalars or str, optional
+        Number of bins or bin edges. Passed to `np.histogram`.
+    ci : float, optional
+        Confidence level for the intervals (e.g., 0.68 for 68% confidence). Default is 0.68.
+    weights : array_like, optional
+        Weights for each data point in `r`. If None, unweighted counts are used.
+    return_generator : bool, optional
+        If True, returns a function that generates random realizations of the weighted histogram from the 
+        Gamma-distributed posterior. Default is False.
+    weight_fn : callable, optional
+        A function to estimate the weight to assign to bins with zero weighted counts. If None, uses the median 
+        of the provided weights.
+    **kwargs
+        Additional keyword arguments passed to `np.histogram`.
+
+    Returns
+    -------
+    tuple
+        If `return_generator` is False:
+            (lower_limit_weighted, upper_limit_weighted)
+        Confidence interval bounds for each bin of the weighted histogram.
+
+        If `return_generator` is True:
+            (generator, limits)
+        - `generator`: A function `f(n)` that returns `n` random samples from the posterior distribution 
+          of the weighted histogram.
+        - `limits`: Tuple of confidence bounds as above.
+
+    Notes
+    -----
+    This function assumes Poisson-distributed counts and uses a Gamma distribution to approximate 
+    the posterior distribution of bin counts. The resulting confidence intervals are scaled to reflect 
+    weighted data. Bins with zero weighted counts are handled using either the median weight or a user-defined 
+    function evaluated at bin centers.
+    """    
     alpha = (1. - ci)/2.       
     y_r,_ = np.histogram(
         r,
@@ -316,22 +358,11 @@ def gamma_histcounts (r, bins=10, ci=0.68, weights=None, return_generator=False,
         weights=weights,       
         **kwargs
     )
-    # \\ replace 0 counts with 1 count * average weight
     
+    # \\ replace 0 counts with 1 count * average weight
     if weight_fn is None:
         weighted_hist[weighted_hist==0] = np.nanmedian(weights)
     else:       
-        #import matplotlib.pyplot as plt
-        #plt.scatter(
-        #    r,
-        #    weights
-        #)
-        #ms = np.linspace(6., 10.5)
-        #plt.plot(
-        #    ms,
-        #    weight_fn(ms)
-        #)
-        #plt.yscale('log')
         weighted_hist[weighted_hist==0] = weight_fn(midpts(bin_edges)[weighted_hist==0])
     y_r[y_r == 0] = 1
 
