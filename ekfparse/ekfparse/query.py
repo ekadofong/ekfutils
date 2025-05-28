@@ -179,7 +179,7 @@ def identify_galexcoadds ( ra, dec, radius=None, verbose=True ):
     
     return (fuv_name, nuv_name), choice
 
-def get_galexobs ( ra, dec, radius=None ):
+def get_galexobs ( ra, dec, radius=None, verbose=True ):
     """
     Get nearby observations from MAST for a given position.
 
@@ -196,7 +196,10 @@ def get_galexobs ( ra, dec, radius=None ):
         radius = 10. * u.arcsec
      
     (fuv_name, nuv_name), choice = identify_galexcoadds (ra, dec, radius)
+    
     if choice is None:
+        if verbose:
+            print('[ekfparse.query.get_galexobs] No Galex observations!')
         return None, (None, None)
     dproducts = Observations.get_product_list ( choice )   
     #topull = dproducts[dproducts['productGroupDescription'] == 'Minimum Recommended Products']
@@ -233,6 +236,13 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=Tr
         topull, names = get_galexobs ( ra, dec, **kwargs )
     else:
         topull, names = obsout
+
+    if np.all([ x is None for x in names]):
+        if verbose:
+            print('[ekfparse.query.download_galeximages] No Galex coadds identified!')
+        return 1, f'No Galex observations found for {name}', None        
+        
+        
     if sparse_download:
         # \\ AIS filename fix
         anames = [ hotfix_galex_naming(_name) for _name in names ]
