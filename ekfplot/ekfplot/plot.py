@@ -1332,3 +1332,32 @@ def violinplot ( distributions, ax=None, clist=None, labels=None, **kwargs ):
 def celestial_plot ( x, y, ax, **kwargs ):
     im = ax.plot(x,y, transform=ax.get_transform('fk5'), **kwargs)
     return im, ax
+
+
+def upper_or_lower_limit ( x, y, dx=0.1, dy=0.1, xscale='linear', yscale='linear', ax=None, **kwargs):
+    if ax is None:
+        ax = plt.subplot(111)
+    
+    if xscale == 'log':
+        fn = lambda x,dx,sign: 10.**(np.log10(x) + sign*dx)
+    else:
+        fn = lambda x,dx,sign: x + sign*dx
+    if yscale == 'log':
+        dy_fn = lambda y, dy: 10.**(np.log10(y)+dy) - y
+    else:
+        dy_fn = lambda y, dy: dy
+        
+    ax.hlines(
+        y,
+        fn(x,dx,1),
+        fn(x,dx,-1),
+        **kwargs
+    )
+    
+    for _ in range(len(y)):
+        ax.annotate(
+            '',
+            xy=(x[_],y[_] + dy_fn(y[_],dy)),
+            xytext=(x[_],y[_]),
+            arrowprops=dict(arrowstyle='->', **kwargs),            
+        )
