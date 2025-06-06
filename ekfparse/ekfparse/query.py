@@ -206,6 +206,9 @@ def get_galexobs ( ra, dec, radius=None, verbose=True ):
     return dproducts, (fuv_name, nuv_name)
 
 def hotfix_galex_naming ( obsid ):
+    if obsid is None:
+        return None
+        
     if 'AIS' in obsid:
         parts = obsid.split('_')        
         obsid = '_'.join(parts[:2]) + '_sg' + parts[-1].zfill(2)     
@@ -256,7 +259,9 @@ def download_galeximages ( ra, dec, name, savedir=None, verbose=True, subdirs=Tr
             
             product_filename = topull[_]['productFilename']
             for _name in anames:
-                if _name in product_filename:
+                if _name is None:
+                    continue
+                elif _name in product_filename:
                     is_from_best = True
             
             do_pull[_] = is_from_best
