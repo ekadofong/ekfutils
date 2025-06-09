@@ -1359,5 +1359,21 @@ def upper_or_lower_limit ( x, y, dx=0.1, dy=0.1, xscale='linear', yscale='linear
             '',
             xy=(x[_],y[_] + dy_fn(y[_],dy)),
             xytext=(x[_],y[_]),
-            arrowprops=dict(arrowstyle='->', **kwargs),            
+            arrowprops=dict(arrowstyle='->', shrinkA=0., shrinkB=0.,**kwargs),            
         )
+        
+def arrow(x, y, dx, dy, ax=None, color='k', **kwargs):
+    '''
+    An implementation of arrow based on annotate to get around matplotlib's wonky
+    arrow rules
+    '''    
+    if ax is None:
+        ax = plt.subplot(111)
+    
+    ax.annotate(
+        '',
+        xy=(x+dx,y+dy),
+        xytext=(x, y),
+        color=color,
+        arrowprops=dict(arrowstyle='->', shrinkA=0., shrinkB=0., **kwargs)
+    )    
