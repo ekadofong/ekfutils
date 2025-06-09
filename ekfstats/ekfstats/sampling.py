@@ -299,7 +299,7 @@ def poissonian_histsample ( r, bins=10, size=2000, **kwargs ):
         sample[:,idx] = stats.poisson.rvs (mu=y_r[idx], size=size)
     return sample,  midpts(bin_edges)
     
-def gamma_histcounts (r, bins=10, ci=0.68, weights=None, return_generator=False, weight_fn=None, **kwargs):
+def gamma_histcounts (r, bins=10, ci=0.68, weights=None, u_weights=None, return_generator=False, weight_fn=None, **kwargs):
     """
     Compute weighted histogram counts with confidence intervals using a Gamma approximation to Poisson statistics.
 
@@ -341,7 +341,15 @@ def gamma_histcounts (r, bins=10, ci=0.68, weights=None, return_generator=False,
     the posterior distribution of bin counts. The resulting confidence intervals are scaled to reflect 
     weighted data. Bins with zero weighted counts are handled using either the median weight or a user-defined 
     function evaluated at bin centers.
-    """    
+    """   
+    if weights is None:
+        weights = np.ones(r.shape, dtype=float) 
+    if u_weights is None:
+        u_weights = (np.zeros_like(weights),np.zeros_like(weights))
+    elif not isinstance(u_weights, tuple):
+        print('[sampling.gamma_histcounts] Interpreting u_weights as symmetric uncertainties')
+        u_weights = (u_weights, u_weights)
+        
     alpha = (1. - ci)/2.       
     y_r,_ = np.histogram(
         r,
@@ -349,6 +357,8 @@ def gamma_histcounts (r, bins=10, ci=0.68, weights=None, return_generator=False,
         **kwargs
     ) 
     raw_counts = y_r.copy()
+    
+
     upper_limit_counts = stats.gamma.ppf(1.-alpha, y_r + 0.5, scale=1) 
     lower_limit_counts = stats.gamma.ppf(alpha, y_r+0.5, scale=1)   
 
@@ -358,6 +368,22 @@ def gamma_histcounts (r, bins=10, ci=0.68, weights=None, return_generator=False,
         weights=weights,       
         **kwargs
     )
+    binned_weighted_var_l,_ = np.histogram(
+        r,        
+        bins=bins,
+        weights=u_weights[0]**2,
+    )
+    binned_weighted_var_h,_ = np.histogram(
+        r,        
+        bins=bins,
+        weights=u_weights[1]**2,
+    )
+    #from ekfparse import strings
+    #tag = strings.random_string(3)
+    #np.save(f'/tmp/{tag}_r.npy', r)
+    #np.save(f'/tmp/{tag}_weights.npy', weights)
+    #np.save(f'/tmp/{tag}_u_weights.npy', u_weights[0])
+    #print(f'saved with tag {tag}')
     
     # \\ replace 0 counts with 1 count * average weight
     if weight_fn is None:
@@ -366,16 +392,32 @@ def gamma_histcounts (r, bins=10, ci=0.68, weights=None, return_generator=False,
         weighted_hist[weighted_hist==0] = weight_fn(midpts(bin_edges)[weighted_hist==0])
     y_r[y_r == 0] = 1
 
+    count_err_low = weighted_hist * (1. - lower_limit_counts/y_r)
+    count_err_high = weighted_hist * (upper_limit_counts/y_r - 1.)
+    # Combine both sources of uncertainty
+    lower_uncert = np.sqrt(binned_weighted_var_l + count_err_low**2)
+    upper_uncert = np.sqrt(binned_weighted_var_h + count_err_high**2)    
 
-    upper_limit_weighted = weighted_hist * upper_limit_counts / y_r
-    lower_limit_weighted = weighted_hist * lower_limit_counts / y_r
-  
+    #print('ABC')
+    #print(weighted_hist)
+    #print(upper_uncert)
+    lower_limit_weighted = weighted_hist - lower_uncert
+    upper_limit_weighted = weighted_hist + upper_uncert
+    
+    # weighted_hist * upper_limit_counts / y_r - weighted_hist
+    # weighted_hist * (upper_limit_counts/y_r - 1.)
+    #upper_limit_weighted = weighted_hist * upper_limit_counts / y_r
+    #lower_limit_weighted = weighted_hist * lower_limit_counts / y_r
+
     if return_generator:
         limits = (lower_limit_weighted, upper_limit_weighted) 
         generator = lambda n: stats.gamma.rvs (raw_counts+0.5, scale=1, size=(n,len(raw_counts))) * weighted_hist/y_r
         return generator, limits
     else:
-        return (lower_limit_weighted, upper_limit_weighted) 
+        return (lower_limit_weighted, upper_limit_weighted)
+
+        
+        
 
 def poissonian_histcounts (r, bins=10, ci=0.68, weights=None, **kwargs):
     alpha = (1. - ci)/2.
