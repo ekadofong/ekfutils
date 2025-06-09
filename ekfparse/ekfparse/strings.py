@@ -1,7 +1,17 @@
 import re
+from importlib.resources import files
 import numpy as np
 from astropy import coordinates
 from astropy import units as u
+
+def random_string ( nwords=1 ):
+    '''
+    '''
+    wordlist = np.genfromtxt(files('ekfparse.data').joinpath('llm_places.txt'), dtype=str)
+    
+    words = np.random.choice(wordlist, size=nwords)
+    return '_'.join(words)
+    
 
 def where_substring (arr, substring):
     '''
