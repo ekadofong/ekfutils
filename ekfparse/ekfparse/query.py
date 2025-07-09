@@ -526,7 +526,7 @@ def load_gamacatalogs (gama_dir=None):
     catalog = gama.join(gama_masses[['logmstar','dellogmstar','logage','dellogage','absmag_g','absmag_r']])\
         .reset_index().merge(gama_lines[['SPECID',
                            'HA_FLUX','HA_FLUX_ERR','HA_EW','HA_EW_ERR',
-                           'HB_EW','HB_EW_ERR',
+                           'HB_FLUX','HB_FLUX_ERR','HB_EW','HB_EW_ERR',
                            'NIIB_FLUX','NIIB_FLUX_ERR',
                            'NIIR_FLUX','NIIR_FLUX_ERR',
                            ]], on='SPECID').set_index('CATAID')\

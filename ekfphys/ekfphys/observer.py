@@ -56,6 +56,103 @@ def alambda_to_av ( alambda, wv_eff, rv=4.05 ):
     av = alambda*(1. + kl/rv)**-1
     return av
 
+def calzetti_flux_correction_with_uncertainty(wavelength, Av, u_Av, R_V=4.05, return_magcorr=False):
+    """
+    Compute the flux correction factor and its uncertainty using
+    the Calzetti et al. (1994) attenuation law.
+
+    Parameters
+    ----------
+    wavelength : array_like
+        Wavelengths in Angstroms.
+    A_V : float
+        Attenuation in magnitudes at V-band (5500 Å).
+    u_A_V : float
+        Uncertainty in A(V).
+    R_V : float, optional
+        Total-to-selective extinction ratio (default is 4.05).
+
+    Returns
+    -------
+    flux_correction : ndarray
+        Multiplicative factor to convert observed to intrinsic flux:
+        F_intrinsic = F_observed * flux_correction
+    uncertainty : ndarray
+        1σ uncertainty in the flux correction factor.
+    """
+    wavelength = np.array(wavelength, dtype=float)
+    lambda_um = wavelength / 1e4  # Convert Å to microns
+
+    k_lambda = np.zeros_like(lambda_um)
+    valid = (lambda_um >= 0.12) & (lambda_um <= 2.2)
+    x = lambda_um[valid]
+
+    # Calzetti law
+    k_valid = np.where(
+        x <= 0.63,
+        2.659 * (-2.156 + 1.509 / x - 0.198 / x**2 + 0.011 / x**3) + R_V,
+        2.659 * (-1.857 + 1.040 / x) + R_V
+    )
+    k_lambda[valid] = k_valid
+    k_lambda[~valid] = np.nan
+
+    A_lambda = k_lambda * (Av / R_V)
+    u_A_lambda = k_lambda * (u_Av / R_V)
+    if return_magcorr:
+        return A_lambda, u_A_lambda
+    
+    flux_corr = 10**(0.4 * A_lambda)
+
+    # Error propagation
+    ln10 = np.log(10)
+    u_flux_corr = flux_corr * ln10 * 0.4 * (k_lambda / R_V) * u_Av
+
+    return flux_corr, u_flux_corr
+
+def calzetti_curve(wavelength, R_V=4.05):
+    """
+    Compute the flux correction factor and its uncertainty using
+    the Calzetti et al. (1994) attenuation law.
+
+    Parameters
+    ----------
+    wavelength : array_like
+        Wavelengths in Angstroms.
+    A_V : float
+        Attenuation in magnitudes at V-band (5500 Å).
+    u_A_V : float
+        Uncertainty in A(V).
+    R_V : float, optional
+        Total-to-selective extinction ratio (default is 4.05).
+
+    Returns
+    -------
+    flux_correction : ndarray
+        Multiplicative factor to convert observed to intrinsic flux:
+        F_intrinsic = F_observed * flux_correction
+    uncertainty : ndarray
+        1σ uncertainty in the flux correction factor.
+    """
+    wavelength = np.array(wavelength, dtype=float)
+    lambda_um = wavelength / 1e4  # Convert Å to microns
+
+    k_lambda = np.zeros_like(lambda_um)
+    valid = (lambda_um >= 0.12) & (lambda_um <= 2.2)
+    x = lambda_um[valid]
+
+    # Calzetti law
+    k_valid = np.where(
+        x <= 0.63,
+        2.659 * (-2.156 + 1.509 / x - 0.198 / x**2 + 0.011 / x**3) + R_V,
+        2.659 * (-1.857 + 1.040 / x) + R_V
+    )
+    k_lambda[valid] = k_valid
+    k_lambda[~valid] = np.nan
+
+    return k_lambda / R_V
+
+
+
 def extinction_correction ( wavelength, av, u_av=None, RV=4.05, curve=None, return_magcorr=False ):
     if curve is None:
         curve = extinction.calzetti00
