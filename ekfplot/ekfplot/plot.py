@@ -43,7 +43,7 @@ common_labels = {
     'haew':r'$\rm EW_{\rm H\alpha}$ [$\rm \AA$]',                           # \\ Halpha EW
     'halum':r'${\rm L}({\rm H\alpha})$ [$\rm erg\ s^{-1}$]',                           # \\ Halpha luminosity
     'haflux':r'${\rm F_{H\alpha}}$ [$\rm erg\ s^{-1}\ cm^{-2}$]',
-    'fuvlum':r'${\rm L}_\nu({\rm FUV})$ [erg s$^{-1}$ Hz$^{-1}$]',                     # \\ FUV spectral luminosity
+    'fuvlum':r'${\rm L}_\nu({\rm FUV})$ [$\rm erg\ s^{-1}\ Hz^{-1}$]',                     # \\ FUV spectral luminosity
     'tdep':r'$t_{\rm dep}$ [Gyr]',                                          # \\ depletion time
     'logtdep':r'$\log_{10}(t_{\rm dep}/[\rm Gyr])$',                        # \\ log10 of depletion time
     'ssfr':r'sSFR [${\rm yr}^{-1}$]',                                       # \\ specific SFR
@@ -327,6 +327,19 @@ def imshow ( im, ax=None, q=0.025, origin='lower', center=False, cval=0., qlow=N
     
     
     return imshow_out, ax
+
+def scatter ( x, y, c=None, ax=None, alpha=0.1, **kwargs ):
+    if ax is None:
+        ax = plt.subplot(111)
+    
+    if c is not None:
+        if 'vmin' not in kwargs.keys():
+            kwargs['vmin'] = np.nanquantile(c, alpha/2.)
+        if 'vmax' not in kwargs.keys():
+            kwargs['vmax'] = np.nanquantile(c, 1.-alpha/2.)
+    
+    im = ax.scatter( x,y,c=c, **kwargs)
+    return im, ax
 
 def hist2d (
         x,
@@ -690,7 +703,12 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
             else:
                 kwargs['color'] = kwargs['cmap'](0.5)
             del kwargs['cmap']
-        ax.plot ( 0, 0, label=label, lw=2, **kwargs)
+            
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        ax.plot ( 0, 0, label=label, lw=2, color=kwargs['color'], )
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
     
     return im, ax
     
@@ -881,7 +899,7 @@ def running_quantile ( x,
                     )
             else:
                 #ax.fill_between ( bins, ypad[:,0], ypad[:,1], alpha=std_alpha,**kwargs )           
-                ax.fill_between ( bins, ystat[:,0,2], ystat[:,2,2], alpha=std_alpha,**kwargs)
+                ax.fill_between ( xmid, ystat[:,0,2], ystat[:,2,2], alpha=std_alpha,**kwargs)
     else:
         if std_format == 'errorbar':  
             errorbar ( xmid, ystat[:,1],
@@ -916,17 +934,18 @@ def running_quantile ( x,
                 ystat[:,0],
                 ystat[:,2],
                 alpha=std_alpha,
-                color=color.modulate(1.-std_alpha).base
+                color=color.base
             )
-            for statindex in [0,2]:
-                outlined_plot(
-                    xmid,
-                    ystat[:,statindex],
-                    color=color.base,
-                    ax=ax,
-                    **kwargs
-                )  
-                
+            if False:
+                for statindex in [0,2]:
+                    outlined_plot(
+                        xmid,
+                        ystat[:,statindex],
+                        color=color.base,
+                        ax=ax,
+                        **kwargs
+                    )  
+                    
             # \\ make legend icon
             rect = patches.Rectangle((-99,-99), 0, 0, facecolor=color.modulate(1.-std_alpha).base, edgecolor=color.base, lw=3, label=label)
             ax.add_patch(rect)          

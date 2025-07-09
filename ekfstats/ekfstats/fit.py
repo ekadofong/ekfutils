@@ -431,7 +431,7 @@ def print_poly2d ( coeffs, deg ):
     print(st)
 
 def polyfit2d ( x, y, z, deg):
-    x,y,z = ef.fmasker(x,y,z)
+    x,y,z = sampling.fmasker(x,y,z)
     xy = np.vstack((x,y))
     
     ncoeffs = (deg + 1)*(deg + 2)//2
@@ -520,17 +520,18 @@ def normalize ( y, x=None, kind='max'):
     if kind == 'max':
         return y/np.nanmax(y)
 
-def quickfit ( predict_fn, x, y, u_y=None, bounds=None ):
+def quickfit ( predict_fn, x, y, u_y=None, u_x=None, bounds=None, fit_intrinsic_scatter=False ):
     if u_y is None:
         u_y = 0.01*y
         
     fitter = BaseInferer ()
     fitter.set_predict(predict_fn)
-    fitter.set_loglikelihood(fitter.define_gaussianlikelihood(fitter.predict,False))
+    fitter.set_loglikelihood(fitter.define_gaussianlikelihood(fitter.predict,fit_intrinsic_scatter))
     fitter.set_bounds(bounds)
     fitter.set_uniformprior(fitter.bounds)
-    fitter.run((x,y,u_y, None), )
-    return fitter
+    data = (x,y,u_y, u_x)
+    fitter.run(data)
+    return fitter, data
 
 def closedform_leastsq (x,y):
     flat = np.ones(x.shape[0])

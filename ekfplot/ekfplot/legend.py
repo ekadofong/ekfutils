@@ -55,7 +55,8 @@ def make_artist_bounded_estimate ( color='tab:red', modulations = [0.4, 0.25], l
                       color=color.modulate(modulations[ix]).base
                       )\
         for ix in range(len(modulations)) ]
-    lines.append(Line2D([], [], linewidth=lw, dashes=(100,1), color=color.base),  )
+    lines.append(Line2D([], [], linewidth=lw*1.3, dashes=(100,1), color='w', **kwargs),  )
+    lines.append(Line2D([], [], linewidth=lw, dashes=(100,1), color=color.base, **kwargs),  )
         
     artist = tuple(lines)
     #handles, labels = add_to_legend ( artist, label, ax, **kwargs )
