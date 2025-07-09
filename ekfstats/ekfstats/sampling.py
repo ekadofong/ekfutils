@@ -299,49 +299,51 @@ def poissonian_histsample ( r, bins=10, size=2000, **kwargs ):
         sample[:,idx] = stats.poisson.rvs (mu=y_r[idx], size=size)
     return sample,  midpts(bin_edges)
     
-def gamma_histcounts (r, bins=10, ci=0.68, weights=None, u_weights=None, return_generator=False, weight_fn=None, **kwargs):
+def gamma_histcounts(r, bins=10, ci=0.68, weights=None, u_weights=None,
+                     return_generator=False, weight_fn=None, **kwargs):
     """
-    Compute weighted histogram counts with confidence intervals using a Gamma approximation to Poisson statistics.
+    Compute confidence intervals for a weighted histogram using a Gamma approximation
+    to the Poisson distribution.
 
     Parameters
     ----------
     r : array_like
         Input data to be histogrammed.
-    bins : int or sequence of scalars or str, optional
-        Number of bins or bin edges. Passed to `np.histogram`.
+    bins : int, sequence of scalars, or str, optional
+        Number of bins or bin edges; passed to `np.histogram`.
     ci : float, optional
-        Confidence level for the intervals (e.g., 0.68 for 68% confidence). Default is 0.68.
+        Confidence level (e.g., 0.68 for ~1sigma). Default is 0.68.
     weights : array_like, optional
-        Weights for each data point in `r`. If None, unweighted counts are used.
+        Weights associated with each entry in `r`. Defaults to 1 for each point.
+    u_weights : array_like or tuple of arrays, optional
+        Uncertainties on weights. Can be a single array (assumed symmetric), or a tuple
+        (lower uncertainties, upper uncertainties). Default is zero uncertainty.
     return_generator : bool, optional
-        If True, returns a function that generates random realizations of the weighted histogram from the 
-        Gamma-distributed posterior. Default is False.
+        If True, also return a sampler function that generates realizations from the
+        posterior distribution of histogram counts.
     weight_fn : callable, optional
-        A function to estimate the weight to assign to bins with zero weighted counts. If None, uses the median 
-        of the provided weights.
+        Function to assign weights to bins with zero total weight. Defaults to using
+        the median of provided weights.
     **kwargs
-        Additional keyword arguments passed to `np.histogram`.
+        Additional arguments passed to `np.histogram`.
 
     Returns
     -------
-    tuple
-        If `return_generator` is False:
-            (lower_limit_weighted, upper_limit_weighted)
-        Confidence interval bounds for each bin of the weighted histogram.
-
-        If `return_generator` is True:
-            (generator, limits)
-        - `generator`: A function `f(n)` that returns `n` random samples from the posterior distribution 
-          of the weighted histogram.
-        - `limits`: Tuple of confidence bounds as above.
+    If return_generator is False:
+        (lower, upper) : tuple of arrays
+            Lower and upper confidence limits on the weighted histogram counts.
+    If return_generator is True:
+        (generator, (lower, upper)) : tuple
+            - generator : callable, returns samples from posterior of each bin.
+            - (lower, upper) : confidence interval bounds.
 
     Notes
     -----
-    This function assumes Poisson-distributed counts and uses a Gamma distribution to approximate 
-    the posterior distribution of bin counts. The resulting confidence intervals are scaled to reflect 
-    weighted data. Bins with zero weighted counts are handled using either the median weight or a user-defined 
-    function evaluated at bin centers.
-    """   
+    - Assumes Poisson counting with Gamma posterior for each bin.
+    - Handles zero-weight bins using user-defined or fallback substitution.
+    - Final error bars include both Poisson (counting) and weight uncertainty.
+    """
+  
     if weights is None:
         weights = np.ones(r.shape, dtype=float) 
     if u_weights is None:
@@ -358,7 +360,7 @@ def gamma_histcounts (r, bins=10, ci=0.68, weights=None, u_weights=None, return_
     ) 
     raw_counts = y_r.copy()
     
-
+    
     upper_limit_counts = stats.gamma.ppf(1.-alpha, y_r + 0.5, scale=1) 
     lower_limit_counts = stats.gamma.ppf(alpha, y_r+0.5, scale=1)   
 
@@ -378,12 +380,6 @@ def gamma_histcounts (r, bins=10, ci=0.68, weights=None, u_weights=None, return_
         bins=bins,
         weights=u_weights[1]**2,
     )
-    #from ekfparse import strings
-    #tag = strings.random_string(3)
-    #np.save(f'/tmp/{tag}_r.npy', r)
-    #np.save(f'/tmp/{tag}_weights.npy', weights)
-    #np.save(f'/tmp/{tag}_u_weights.npy', u_weights[0])
-    #print(f'saved with tag {tag}')
     
     # \\ replace 0 counts with 1 count * average weight
     if weight_fn is None:
@@ -392,6 +388,10 @@ def gamma_histcounts (r, bins=10, ci=0.68, weights=None, u_weights=None, return_
         weighted_hist[weighted_hist==0] = weight_fn(midpts(bin_edges)[weighted_hist==0])
     y_r[y_r == 0] = 1
 
+    # \\ for each bin i
+    # \\ sum(weights) * ( 1 - N_low / N )
+    # \\ W/N ( N - N_low )
+    # \\ (average weight) * (counts - lower_limit_on_counts )
     count_err_low = weighted_hist * (1. - lower_limit_counts/y_r)
     count_err_high = weighted_hist * (upper_limit_counts/y_r - 1.)
     # Combine both sources of uncertainty
@@ -812,7 +812,7 @@ def running_sigmaclip ( x, y, low=4., high=4., xbins=None, Nbins=30, apply=True 
     
 
 def sigmaclipped_std ( x, low=4., high=4. ):
-    return sigmaclip(x,low,high).clipped.std()
+    return sigmaclip(fmasker(x),low,high).clipped.std()
 
 def gelmanrubin ( chains ):
     '''
@@ -876,3 +876,346 @@ def strict_bin_by_count ( x, min_count ):
     bin_edges = np.array(bin_edges + [np.max(sorted_x[bin_assignments==max(bin_assignments)])]) 
     
     return bin_assignments[return_to_orig].astype(int), bin_edges
+
+
+def vec_to_cov_matrix(cov, D):
+    """
+    Convert a flattened upper triangular vector of a DxD covariance matrix
+    into the full symmetric covariance matrix.
+    
+    Parameters:
+    - cov: list or array of length D*(D+1)//2, containing the upper triangle
+           of the covariance matrix, row-wise.
+    - D: dimension of the desired square covariance matrix
+    
+    Returns:
+    - A (D x D) numpy array representing the full symmetric covariance matrix.
+    """
+    if len(cov) != D * (D + 1) // 2:
+        raise ValueError("Length of cov does not match D*(D+1)//2")
+
+    full_cov = np.zeros((D, D))
+    idx = 0
+    for i in range(D):
+        for j in range(i, D):
+            full_cov[i, j] = cov[idx]
+            full_cov[j, i] = cov[idx]  # symmetry
+            idx += 1
+    return full_cov
+
+import numpy as np
+
+def vecs_to_cov_matrices(flat_covs, D):
+    """
+    Convert a flattened list of N upper-triangular covariance matrices into
+    full symmetric (N x D x D) array.
+
+    Parameters:
+    - flat_covs: list or array of length N * (D*(D+1)//2), containing upper triangles
+                 of N covariance matrices, row-wise.
+    - D: dimension of each square covariance matrix
+
+    Returns:
+    - A numpy array of shape (N, D, D) representing all covariance matrices.
+    """
+    num_elements_per_matrix = D * (D + 1) // 2
+    if len(flat_covs) % num_elements_per_matrix != 0:
+        raise ValueError("Length of flat_covs is not divisible by D*(D+1)//2")
+
+    N = len(flat_covs) // num_elements_per_matrix
+    flat_covs = np.asarray(flat_covs)
+    cov_matrices = np.zeros((N, D, D))
+
+    for n in range(N):
+        idx_start = n * num_elements_per_matrix
+        idx_end = idx_start + num_elements_per_matrix
+        cov = flat_covs[idx_start:idx_end]
+        cov_matrices[n] = vec_to_cov_matrix(cov, D)
+
+    return cov_matrices
+
+def cov_matrices_to_vecs(cov_matrices):
+    """
+    Convert a (N x D x D) array of symmetric covariance matrices into
+    a flattened list of their upper-triangular parts (row-wise).
+
+    Parameters:
+    - cov_matrices: numpy array of shape (N, D, D)
+
+    Returns:
+    - flat_covs: list of length N * (D*(D+1)//2), containing upper triangle
+                 of each matrix in row-wise order.
+    """
+    N, D, D2 = cov_matrices.shape
+    if D != D2:
+        raise ValueError("Input matrices must be square (D x D)")
+
+    flat_covs = []
+    for n in range(N):
+        for i in range(D):
+            for j in range(i, D):
+                flat_covs.append(cov_matrices[n, i, j])
+    return flat_covs
+
+def generate_psd_from_correlation(diag_vals):
+    """
+    Generate a random symmetric positive semi-definite (PSD) matrix 
+    with a specified diagonal.
+
+    The resulting matrix is constructed by:
+      1. Generating a random correlation matrix from a random lower 
+         triangular matrix via Cholesky-like decomposition.
+      2. Scaling the correlation matrix so that its diagonal matches 
+         the provided `diag_vals`.
+
+    Parameters
+    ----------
+    diag_vals : array_like
+        A 1D array or list of positive values specifying the desired 
+        diagonal entries of the resulting PSD matrix.
+
+    Returns
+    -------
+    A : ndarray of shape (n, n)
+        A symmetric positive semi-definite matrix with diagonal 
+        approximately equal to `diag_vals`.
+
+    Notes
+    -----
+    - The matrix is generated using a random correlation matrix, so 
+      the off-diagonal structure is arbitrary and varies each call.
+    - The resulting matrix satisfies A ≈ D^{1/2} C D^{1/2}, where 
+      D = diag(diag_vals) and C is a random correlation matrix.
+    """    
+    n = len(diag_vals)
+    L = np.tril(np.random.randn(n, n))
+    C = L @ L.T
+    C /= np.outer(np.sqrt(np.diag(C)), np.sqrt(np.diag(C)))  # convert to correlation
+    d_sqrt = np.sqrt(diag_vals)
+    A = C * np.outer(d_sqrt, d_sqrt)
+    return A
+
+def generate_nonnegative_psd_from_correlation(diag_vals):
+    """
+    Generate a symmetric positive semi-definite (PSD) matrix with a given diagonal
+    and only nonnegative entries (including covariances).
+
+    This is achieved by:
+      1. Generating a random correlation matrix with only nonnegative entries.
+      2. Scaling it such that the final matrix has the specified diagonal.
+
+    Parameters
+    ----------
+    diag_vals : array_like
+        A 1D array or list of positive values specifying the desired diagonal
+        of the resulting matrix.
+
+    Returns
+    -------
+    A : ndarray of shape (n, n)
+        A symmetric PSD matrix with diagonal approximately equal to `diag_vals`,
+        and all elements A[i, j] >= 0.
+
+    Notes
+    -----
+    - The resulting matrix A is of the form A = D^{1/2} C D^{1/2}, where
+      D = diag(diag_vals) and C is a correlation matrix with only nonnegative entries.
+    - The correlation matrix is generated using a nonnegative random matrix,
+      which may bias the off-diagonal entries toward larger values.
+    """
+    diag_vals = np.asarray(diag_vals)
+    n = len(diag_vals)
+
+    # Generate a nonnegative random matrix and symmetrize it
+    L = np.tril(np.abs(np.random.randn(n, n)))
+    C = L @ L.T
+
+    # Normalize to correlation matrix with unit diagonal
+    C /= np.outer(np.sqrt(np.diag(C)), np.sqrt(np.diag(C)))
+
+    # Ensure all elements are nonnegative due to construction
+    assert np.all(C >= 0)
+
+    # Scale to match desired diagonal
+    d_sqrt = np.sqrt(diag_vals)
+    A = C * np.outer(d_sqrt, d_sqrt)
+
+    return A
+
+
+from scipy.stats import truncnorm
+
+def truncated_normal_sample(mean, s, lower, upper):
+    """
+    Sample from a truncated normal distribution with arbitrary-shaped mean and std arrays.
+
+    Parameters
+    ----------
+    mean : array_like
+        Mean(s) of the normal distribution(s).
+    s : array_like
+        Standard deviation(s) of the normal distribution(s).
+    lower : array_like or float
+        Lower bound(s) for truncation. Can be scalar or array of same shape as mean.
+    upper : array_like or float
+        Upper bound(s) for truncation. Can be scalar or array of same shape as mean.
+
+    Returns
+    -------
+    samples : ndarray
+        Samples from the specified truncated normal distribution(s), with same shape as `mean`.
+    """
+    mean = np.asarray(mean)
+    s = np.asarray(s)
+    lower = np.asarray(lower)
+    upper = np.asarray(upper)
+
+    # Ensure all arrays can broadcast together
+    shape = np.broadcast_shapes(mean.shape, s.shape, np.shape(lower), np.shape(upper))
+
+    # Broadcast all inputs
+    mean = np.broadcast_to(mean, shape)
+    s = np.broadcast_to(s, shape)
+    lower = np.broadcast_to(lower, shape)
+    upper = np.broadcast_to(upper, shape)
+
+    # Compute standardized bounds
+    a = (lower - mean) / s
+    b = (upper - mean) / s
+
+    return truncnorm.rvs(a, b, loc=mean, scale=s)
+
+
+
+
+def asymmetric_truncnorm_sample(mean, sigma_lower, sigma_upper, lower_limit=-np.inf, upper_limit=np.inf, size=1):
+    """
+    Generate samples from an asymmetric truncated normal distribution.
+    
+    The distribution is constructed by stitching together two normal distributions
+    about the mean, with different standard deviations on either side.
+    
+    Parameters:
+    -----------
+    mean : float or array_like
+        Mean of the distribution(s)
+    sigma_upper : float or array_like
+        Standard deviation for x > mean
+    sigma_lower : float or array_like
+        Standard deviation for x <= mean
+    lower_limit : float or array_like
+        Lower truncation bound
+    upper_limit : float or array_like
+        Upper truncation bound
+    size : int or tuple of ints, optional
+        Number of samples to generate. If parameters are arrays of length N,
+        this generates size samples for each of the N distributions.
+        
+    Returns:
+    --------
+    samples : ndarray
+        Array of samples with shape (size, N) if parameters are arrays,
+        or (size,) if parameters are scalars
+    """
+    # Convert inputs to numpy arrays
+    mean = np.asarray(mean)
+    sigma_upper = np.asarray(sigma_upper)
+    sigma_lower = np.asarray(sigma_lower)
+    lower_limit = np.asarray(lower_limit)
+    upper_limit = np.asarray(upper_limit)
+    
+    # Ensure all parameters have the same shape
+    params = np.broadcast_arrays(mean, sigma_upper, sigma_lower, lower_limit, upper_limit)
+    mean, sigma_upper, sigma_lower, lower_limit, upper_limit = params
+    
+    # Flatten for easier processing
+    orig_shape = mean.shape
+    mean_flat = mean.flatten()
+    sigma_upper_flat = sigma_upper.flatten()
+    sigma_lower_flat = sigma_lower.flatten()
+    lower_limit_flat = lower_limit.flatten()
+    upper_limit_flat = upper_limit.flatten()
+    
+    n_dists = len(mean_flat)
+    
+    # Initialize output array
+    if orig_shape == ():
+        output_shape = (size,)
+    else:
+        output_shape = (size, n_dists)
+    
+    samples = np.zeros(output_shape)
+    
+    for i in range(n_dists):
+        mu = mean_flat[i]
+        s_upper = sigma_upper_flat[i]
+        s_lower = sigma_lower_flat[i]
+        a = lower_limit_flat[i]
+        b = upper_limit_flat[i]
+        
+        # Calculate the probability mass on each side of the mean
+        # For the lower side (x <= mean)
+        if a <= mu:
+            # Standardized bounds for lower distribution
+            a_lower_std = (a - mu) / s_lower
+            b_lower_std = 0  # At the mean
+            
+            # CDF values for the lower truncated normal
+            lower_cdf_a = truncnorm.cdf(a_lower_std, a_lower_std, np.inf)
+            lower_cdf_b = truncnorm.cdf(b_lower_std, a_lower_std, np.inf)
+            p_lower = lower_cdf_b - lower_cdf_a
+        else:
+            p_lower = 0
+            
+        # For the upper side (x > mean)
+        if b > mu:
+            # Standardized bounds for upper distribution
+            a_upper_std = 0  # At the mean (exclusive)
+            b_upper_std = (b - mu) / s_upper
+            
+            # CDF values for the upper truncated normal
+            upper_cdf_a = truncnorm.cdf(a_upper_std, -np.inf, b_upper_std)
+            upper_cdf_b = truncnorm.cdf(b_upper_std, -np.inf, b_upper_std)
+            p_upper = upper_cdf_b - upper_cdf_a
+        else:
+            p_upper = 0
+            
+        # Normalize probabilities
+        p_total = p_lower + p_upper
+        if p_total == 0:
+            raise ValueError(f"No valid range for distribution {i}: mean={mu}, bounds=[{a}, {b}]")
+            
+        p_lower /= p_total
+        p_upper /= p_total
+        
+        # Generate samples
+        for j in range(size):
+            # Decide which side to sample from
+            if np.random.random() < p_lower and a <= mu:
+                # Sample from lower side
+                a_std = max((a - mu) / s_lower, -10)  # Clip for numerical stability
+                b_std = 0
+                sample_std = truncnorm.rvs(a_std, b_std, loc=0, scale=1)
+                sample = mu + sample_std * s_lower
+            else:
+                # Sample from upper side
+                a_std = 0
+                b_std = min((b - mu) / s_upper, 10)  # Clip for numerical stability
+                sample_std = truncnorm.rvs(a_std, b_std, loc=0, scale=1)               
+                sample = mu + sample_std * s_upper
+            
+            if orig_shape == ():
+                samples[j] = sample
+            else:
+                samples[j, i] = sample
+    
+    # Reshape output if needed
+    if orig_shape != () and len(orig_shape) > 0:
+        if size == 1:
+            samples = samples.reshape(orig_shape)
+        else:
+            samples = samples.reshape((size,) + orig_shape)
+    
+    return samples
+
+
