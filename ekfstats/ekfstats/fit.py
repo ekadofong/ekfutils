@@ -247,7 +247,7 @@ class BaseInferer (object):
             axarr = [axarr]
         for aindex, ax in enumerate(axarr):
             for windex in range(self.sampler.nwalkers):
-                ax.plot ( chain[:, windex, aindex], color='lightgrey', alpha=0.1)     
+                ax.plot ( chain[:, windex, aindex], color='grey', alpha=0.1)     
             ax.axhline ( np.median(chain[:,:,aindex]), color='tab:blue', lw=2)
             for qt in [0.16,.84]:
                 ax.axhline ( np.quantile(chain[:,:,aindex], qt), color='tab:blue', ls='--', lw=0.5)
@@ -345,7 +345,11 @@ class BaseInferer (object):
         if alpha is None:
             return parr
         else:
-            return np.quantile(parr, [alpha/2.,.5,1.-alpha/2.], axis=0)    
+            return np.quantile(parr, [alpha/2.,.5,1.-alpha/2.], axis=0)  
+    
+    @property
+    def mapo (self):
+        return self.sampler.get_chain(flat=True)[np.argmax(self.sampler.get_log_prob(flat=True))]        
     
     def plot_uncertainties (self, ms, ax=None, color='k', transparency=0.9, alpha=0.32, 
                             discard=100,xscale='linear', yscale='linear', label=None, show_std=True, lw=2, show_median=True, **kwargs ):

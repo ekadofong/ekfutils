@@ -45,7 +45,6 @@ def gecorrection(wave, AvorEBV, Rv=3.1, unit='AA', etype='AV', return_magcorr=Fa
         return corr
     
 def balmerdecrement_to_av ( balmerdecrement, intrinsicratio=2.86, RV=4.05 ):
-    balmerintrinsic=2.86
     phi = 2.5*np.log10(intrinsicratio/balmerdecrement)
     dk = np.subtract(*extinction.calzetti00 ( np.array([6563.,4862.]), 1., 1. ) ) 
     AV = RV*phi/dk

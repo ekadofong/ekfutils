@@ -32,6 +32,12 @@ def fmasker ( *args ):
     '''
     return finite_masker(args, inplace=True)
 
+def mask ( mask, *args ):
+    masked_args = []
+    for arg in args:
+        masked_args.append(arg[mask])
+    return fmasker(*masked_args)
+
 def resample ( x_l, npull=500 ):
     if not isinstance(x_l, list):
         x_l = [x_l]
@@ -183,6 +189,50 @@ def weighted_quantile ( x, w, qts ):
 
 def get_quantile_of_value ( x, val ):
     return np.interp(val, np.sort(x), np.linspace(0.,1.,x.size))
+
+def compare_parameter_posteriors(posterior_sample_a, posterior_sample_b, step=0.01, alpha_init=0.5):
+    """
+    Compare two posterior samples to quantify the level of agreement.
+
+    This function computes the smallest symmetric credible interval (centered on the median) 
+    of the difference between two posterior samples that contains zero. The returned value 
+    indicates the minimum credible level (alpha) at which the two posteriors are 
+    statistically consistent (i.e., their difference includes zero).
+
+    Parameters
+    ----------
+    posterior_sample_a : array-like
+        Samples from the first posterior distribution.
+    posterior_sample_b : array-like
+        Samples from the second posterior distribution. Must be the same shape as `posterior_sample_a`.
+
+    step : float, optional
+        Increment step size for increasing the credible interval width (default is 0.01).
+
+    Returns
+    -------
+    alpha : float
+        The smallest credible level such that zero lies within the corresponding symmetric 
+        credible interval of the posterior difference. A lower value indicates higher 
+        consistency between the two posteriors.
+
+    Notes
+    -----
+    This method assumes the input samples are 1D arrays and come from distributions 
+    where the difference is approximately unimodal. For multimodal distributions, results 
+    may be less interpretable.
+    """
+
+    delta = posterior_sample_a - posterior_sample_b
+    
+    alpha = alpha_init
+    while True:
+        bounds = np.quantile(delta, [(1.-alpha)/2., 0.5 + alpha/2.])
+        if (0. > bounds[0])&(0. < bounds[1]):
+            break
+        alpha += step
+    return alpha
+            
 
 def pdf_product ( xA, pdfA, xB, pdfB, npts=100, normalize=True, return_midpts=False, alpha=1e-3 ):
     '''
@@ -544,6 +594,36 @@ def running_metric (x, y,metric_fn, midpts, dx=None, xerr=None, yerr=None, erron
             ystats[:,:,ix] = np.nanquantile(carr, eqt, axis=0)
     return midpts, ystats, dx
 
+def running_ridgeline (xc,yc,midpts, dx=None, **kwargs):
+    # Compute the ridgeline (mode of d) in each bin
+    xc,yc = fmasker(xc,yc)
+    #bin_edges = np.asarray(bins)
+    #bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    if dx is None:
+        dx = np.median(np.diff(midpts))/2.
+    ridgeline_vals = []
+
+    for idx in range(len(midpts)):
+        lo = midpts[idx] - dx
+        hi = midpts[idx] + dx
+        in_bin = (xc >= lo) & (xc < hi)
+        if np.sum(in_bin) < 5:
+            ridgeline_vals.append(np.nan)
+            continue
+
+        d_in_bin = yc[in_bin]
+        try:
+            kde = gaussian_kde(d_in_bin, bw_method=kwargs.get("bw_method", "scott"))
+            d_grid = np.linspace(np.min(d_in_bin), np.max(d_in_bin), 500)
+            mode_val = d_grid[np.argmax(kde(d_grid))]            
+        except KeyboardInterrupt:
+            mode_val = np.nan
+
+        ridgeline_vals.append(mode_val)
+
+    qt = np.array(ridgeline_vals)
+    return midpts, qt
+
 def running_quantile (x, y, midpts, dx=None, xerr=None, yerr=None, qt=0.5, erronqt=False, nresamp=100, return_counts=False ):
     if isinstance(qt, float):
         qt = [qt]    
@@ -739,8 +819,35 @@ def quantiles_against_orthogonalproj ( x, y, bins, return_proj=False, aggregatio
             d,
             bins,
             **kwargs,        
-        )           
-    
+        )  
+    elif aggregation_mode == 'ridgeline':
+        # Compute the ridgeline (mode of d) in each bin
+        bin_edges = np.asarray(bins)
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        ridgeline_vals = []
+
+        for lo, hi in zip(bin_edges[:-1], bin_edges[1:]):
+            in_bin = (xc >= lo) & (xc < hi)
+            if np.sum(in_bin) < 5:
+                ridgeline_vals.append(np.nan)
+                continue
+
+            d_in_bin = d[in_bin]
+            try:
+                kde = gaussian_kde(d_in_bin, bw_method=kwargs.get("bw_method", "scott"))
+                d_grid = np.linspace(np.min(d_in_bin), np.max(d_in_bin), 500)
+                mode_val = d_grid[np.argmax(kde(d_grid))]
+            except Exception:
+                mode_val = np.nan
+
+            ridgeline_vals.append(mode_val)
+
+        xcmid = bin_centers
+        qt = np.array(ridgeline_vals)
+        dxc = np.diff(bins)                 
+    else:
+        raise ValueError(f"Unknown aggregation_mode: {aggregation_mode}")
+        
     if return_proj:
         if aggregation_mode=='running':
             return xcmid, qt, dxc
