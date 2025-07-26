@@ -529,6 +529,7 @@ def load_gamacatalogs (gama_dir=None):
                            'HB_FLUX','HB_FLUX_ERR','HB_EW','HB_EW_ERR',
                            'NIIB_FLUX','NIIB_FLUX_ERR',
                            'NIIR_FLUX','NIIR_FLUX_ERR',
+                           'HA_ABS_EW', 'HB_ABS_EW',
                            ]], on='SPECID').set_index('CATAID')\
             .join(gama_phot[['g_flux','r_flux','i_flux','r_mag']]) # 'radius','sb_r'
             
@@ -545,24 +546,62 @@ def load_gamacatalogs (gama_dir=None):
 
 def load_sdsscatalogs (sdss_dir=None, zmax=0.05, use_scratch=True):
     if sdss_dir is None:
-        sdss_dir = '/Users/kadofong/work/projects/sdss/'
-    sname = f'{sdss_dir}/local_data/scratch_sdss.csv'
+        sdss_dir = '/Users/kadofong/work/projects/sdss/local_data/'
+    sname = f'{sdss_dir}/scratch_sdss.parquet'
     if use_scratch and os.path.exists(sname):
-        cat = pd.read_csv(sname)
+        cat = pd.read_parquet(sname)
         return cat
     
-    sdss = fits.open(f'{sdss_dir}/local_data/specObj-dr17.fits')
+    sdss = fits.open(f'{sdss_dir}/specObj-dr17.fits')
     is_lowz = (sdss[1].data['Z']>0.001)&(sdss[1].data['Z']<zmax)
     cat = np.array([
         sdss[1].data['PLUG_RA'][is_lowz],
         sdss[1].data['PLUG_DEC'][is_lowz],
         sdss[1].data['Z'][is_lowz],
     ])
-    cat = pd.DataFrame(cat.T, index=sdss[1].data['SPECOBJID'][is_lowz], columns=['RA','DEC','Z'])
-    for key in ['SURVEY','RUN2D','PLATE','MJD','FIBERID']:
-        cat[key.lower()] = sdss[1].data[key][is_lowz].byteswap().newbyteorder()
     
+    cat = pd.DataFrame(cat.T, index=np.arange(cat.shape[1]), columns=['RA','DEC','Z'])
+    for key in ['SURVEY','RUN2D','PLATE','MJD','FIBERID', 'SPECOBJID']:
+        cat[key.lower()] = sdss[1].data[key][is_lowz].byteswap().newbyteorder()
+    tags = cat['mjd'].astype(str) + '_' + cat['plate'].astype(str) + '_' + cat['fiberid'].astype(str)
+    cat.index = tags   
+    # \\ add line measurements
+    galspecline = table.Table(fits.getdata(f'{sdss_dir}/galSpecLine-dr8.fits', 1))
+    galspecline = galspecline[galspecline['MJD'] > -1]
+    galspecline = galspecline.to_pandas ()
+    galspecline.index = galspecline['MJD'].astype(str) \
+                        + '_' + galspecline['PLATEID'].astype(str) + '_' \
+                        + galspecline['FIBERID'].astype(str)    
+    
+    balmerlines = ['H_ALPHA','H_BETA']
+    otherlines = ['OIII_4959', 'OIII_5007']
+    bcolumns = [ [ f'{line}_FLUX', f'{line}_FLUX_ERR', f'{line}_EQW', f'{line}_EQW_ERR',  f'{line}_ABS',] for line in balmerlines ]
+    ocolumns = [ [ f'{line}_FLUX', f'{line}_FLUX_ERR', f'{line}_EQW', f'{line}_EQW_ERR' ] for line in otherlines ]
+
+    columns = sum(bcolumns +ocolumns, [] )
+    cat[columns] = galspecline.reindex(cat.index)[columns]
+    
+    if not use_scratch:
+        cat.to_parquet(sname)
     return cat
+
+def load_nasasloanatlas (nsa_dir=None):
+    if nsa_dir is None:
+        nsa_dir = "/Users/kadofong/work/surveys/literature_ref/NSA"
+    
+    data = table.Table(fits.getdata(f"{nsa_dir}/nsa_v0_1_2.fits", 1))
+    
+    nsa['balmer_decrement'] = np.where(
+        (nsa['HAEW']/nsa['HAEWERR']>3.)&(nsa['HBEW']/nsa['HBEWERR']>3.),
+        nsa['HAFLUX']/nsa['HBFLUX'],
+        np.nan
+    )
+    nsa['AV'] = np.where(
+        nsa['balmer_decrement']>2.86,
+        observer.balmerdecrement_to_av(nsa['balmer_decrement']),
+        np.nan
+    )    
+    return data
 
 def download_sdss_spectrum ( row=None, run2d=None, plate=None, mjd=None, fiberid=None, savedir='./sdss_spectra/'):
     if (row is None) and (run2d is None):
