@@ -94,7 +94,7 @@ def abundance_match ( smf, hmf, logmstar_min=5., logmstar_max=10., dm=0.1, smf_s
         Array of log10 halo mass values assigned to each stellar mass, based on abundance matching.
     """    
     integration_grid = np.arange(5., 16.+dm/2., dm)
-    logm_grid = np.arange(logmstar_min, logmstar_max+dm/2., dm)
+    #logm_grid = np.arange(logmstar_min, logmstar_max+dm/2., dm)
     _,iup_smf = integrate_up_massfunction( smf, integration_grid, mf_scale=smf_scale )
     _,iup_hmf = integrate_up_massfunction( hmf, integration_grid, mf_scale=hmf_scale)
 
@@ -103,6 +103,53 @@ def abundance_match ( smf, hmf, logmstar_min=5., logmstar_max=10., dm=0.1, smf_s
     return integration_grid[mask], halo_masses_at_stellarmass[mask]
 
 def abundance_match_withscatter (hmf, shmr_form ='powerlaw', scatter_form='lognormal_constant', logmstar_min=5., logmstar_max=11.):
+    if shmr_form == 'powerlaw':
+        shmr_fn = lambda logmhalo, coeffs: coeffs[0]*logmhalo + coeffs[1] # Mstar = a * Mhalo + b
+        inv_shmr = lambda logmstar, coeffs: logmstar/coeffs[0] - coeffs[1]/coeffs[0] # Mhalo = Mstar/a - b/a
+        shmr_derivative = lambda logmhalo, coeffs: coeffs[0]**-1 # dMh/dM*
+        n_coeffs = 2
+    else:
+        raise NotImplementedError
+
+    if scatter_form == 'lognormal_constant':
+        n_coeffs_scatter = 1
+        pdf = lambda x, logmhalo, coeffs, sig: functions.gaussian(x, 'normalize', shmr_fn(logmhalo, coeffs[:n_coeffs]), sig )
+    elif scatter_form == 'None':
+        n_coeffs_scatter = 0
+        pdf = None
+    else:
+        raise NotImplementedError
+    
+    logmh_grid = np.linspace(8., 12., 295)
+    logms_grid = np.linspace(logmstar_min, logmstar_max, 305)
+    def smf_predict ( logmstar, *coeffs ):            
+        if (pdf is None) or (coeffs[-1] < 0.01):
+            #logmstar = shmr_fn(logmhalo)
+            logmhalo = inv_shmr(logmstar, coeffs) #np.interp ( logmstar, logms_grid, shmr_fn(logms_grid, coeffs) )
+            smf_prediction = hmf(logmhalo)*shmr_derivative(logmhalo, coeffs)
+        else:
+            # \\ n(M*) = ∫ n(Mh)* dM*/dMh * P(M*|Mh) dMh
+            fn = lambda logmhalo: ( hmf(logmhalo) # \\ n(M_h)  
+                    #*shmr_derivative(logms_grid, coeffs[:n_coeffs])**-1 # \\ dM*/dMh
+                    *pdf(logms_grid, logmhalo, coeffs, *coeffs[n_coeffs:])) # \\ P(M*|Mh)
+            
+            integrand = np.array([ fn(logmhalo) for logmhalo in logmh_grid ])
+            smf_prediction = np.trapz(integrand, logmh_grid, axis=0)
+            
+            smf_prediction = np.interp(logmstar, logms_grid, smf_prediction)
+
+        return np.log10(smf_prediction)
+
+
+    #smf_predict = lambda x, *coeffs: integrate.quad(
+    #    lambda logmstar: hmf(shmr_fn(logmstar, coeffs[:n_coeffs]))*shmr_derivative(logmstar,coeffs[:n_coeffs])*pdf(x, logmstar, *coeffs[n_coeffs:]),
+    #    logmstar_min,
+    #    logmstar_max
+    #)[0]
+    
+    return smf_predict
+
+def abundance_match_withscatter_mstar (hmf, shmr_form ='powerlaw', scatter_form='lognormal_constant', logmstar_min=5., logmstar_max=11.):
     if shmr_form == 'powerlaw':
         shmr_fn = lambda logmstar, coeffs: coeffs[0]*logmstar + coeffs[1]
         shmr_derivative = lambda logmstar, coeffs: coeffs[0]
@@ -132,7 +179,48 @@ def abundance_match_withscatter (hmf, shmr_form ='powerlaw', scatter_form='logno
         raise NotImplementedError
     
     logms_grid = np.linspace(logmstar_min, logmstar_max, 300).reshape(-1,1)
-    def smf_predict ( logmstar, *coeffs ):        
+    def smf_predict ( logmstar, *coeffs ):    
+        """
+        Predict the stellar mass function (SMF) given stellar mass and model coefficients.
+        
+        This function computes the SMF prediction using either a direct stellar-halo mass
+        relation (SHMR) approach or a convolution approach with a probability density function
+        (PDF) for scatter modeling.
+        
+        Parameters
+        ----------
+        logmstar : array-like
+            Log10 stellar mass values for which to predict the SMF.
+        *coeffs : tuple
+            Variable number of model coefficients. The first n_coeffs elements are used
+            for the SHMR, and remaining coefficients (if any) are passed to the PDF.
+        
+        Returns
+        -------
+        smf_prediction : array-like
+            Predicted stellar mass function values corresponding to the input stellar masses.
+        
+        Notes
+        -----
+        The function uses two different computational approaches:
+        
+        1. Direct calculation (when pdf is None or last coefficient < 0.01):
+        SMF = HMF(SHMR(M*)) * d(SHMR)/d(M*)
+        
+        2. Convolution approach (when pdf is available and last coefficient >= 0.01):
+        SMF = ∫ HMF(SHMR(Ms)) * d(SHMR)/d(Ms) * PDF(M*|Ms) dMs
+        
+        where HMF is the halo mass function, SHMR is the stellar-halo mass relation,
+        and PDF represents scatter in the relation.
+        
+        The function relies on several global variables:
+        - pdf: probability density function for scatter modeling
+        - logms_grid: grid of stellar masses for integration
+        - n_coeffs: number of coefficients for the SHMR
+        - hmf: halo mass function
+        - shmr_fn: stellar-halo mass relation function
+        - shmr_derivative: derivative of the SHMR
+        """            
         if (pdf is None) or (coeffs[-1] < 0.01):
             smf_prediction = hmf(shmr_fn(logmstar, coeffs))*shmr_derivative(logmstar, coeffs)
         else:
@@ -145,7 +233,6 @@ def abundance_match_withscatter (hmf, shmr_form ='powerlaw', scatter_form='logno
                 logms_grid,
                 axis=0
             )
-            
         return np.log10(smf_prediction)
 
 
