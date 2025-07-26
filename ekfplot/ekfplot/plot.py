@@ -5,6 +5,7 @@ from matplotlib import gridspec
 from matplotlib import transforms
 from matplotlib import patches
 from matplotlib import patheffects
+from matplotlib.lines import Line2D
 from matplotlib.colors import LogNorm
 from matplotlib.collections import LineCollection
 from scipy.integrate import quad
@@ -25,7 +26,7 @@ def convert_label_to_log ( label, single_spaced=True ):
     else:
         unit = unit.strip().strip('$')
     if single_spaced:
-        return r'$\log_{10}(%s/[%s])$' % (name, unit)
+        return r'$\log_{10}(%s/%s)$' % (name, unit)
     else:
         return r'$\log_{10}\left(\frac{%s}{%s}\right)$' % (name, unit)
 
@@ -394,6 +395,7 @@ def hist2d (
                                                                    [alpha, 1.-alpha]), nbins)}
         bins = [scale_fns[xscale](x), scale_fns[yscale](y)]
         
+
     if zscale == 'log':
         kwargs['norm'] = LogNorm ()
     im = ax.hist2d ( x,y, bins=bins, cmap=cmap, **kwargs ) # counts, xbins, ybins
@@ -410,7 +412,7 @@ def hist2d (
             else:
                 cm = cmap
             proj_color = cm ( 0.3 )
-            proj_kwargs['color'] = color
+            proj_kwargs['color'] = proj_color
 
         
         hist ( x, bins=bins[0], ax=axarr[1], **proj_kwargs) 
@@ -427,6 +429,102 @@ def hist2d (
         axarr[1].set_yticklabels(yticklabels)        
     
     return im, axarr
+
+
+def pcolor_avg2d (
+        x,
+        y,
+        metric,
+        bins=None,        
+        alpha=0.01,
+        ax=None,
+        xscale='linear',
+        yscale='linear',
+        zscale='linear',
+        show_proj=False,
+        figsize=None,
+        cmap = 'Greys',
+        proj_kwargs=None,
+        **kwargs
+    ):    
+    if ax is None:
+        if show_proj:
+            if figsize is None:
+                figsize=(7,7)
+            fig = plt.figure(figsize=figsize)
+            grid = gridspec.GridSpec( 4,4, fig)
+            ax = fig.add_subplot ( grid[1:,:-1])
+            axarr = [
+                ax,
+                fig.add_subplot(grid[0,:-1]),
+                fig.add_subplot(grid[1:,-1])
+            ]
+            axarr[1].set_xticks([])
+            axarr[2].set_yticks([])
+        else:
+            ax = plt.subplot(111)
+            axarr = [ax]
+    else:
+        if show_proj:
+            assert hasattr(ax, '__len__'), "All axes must be provided in order to show 1D projections."
+            axarr = ax
+            ax = axarr[0]
+        else:
+            axarr = [ax]
+        
+    if bins is None:
+        nbins = 10
+    elif isinstance(bins, int):
+        nbins = bins
+
+
+    if (bins is None) or isinstance(bins, int):   
+        scale_fns = {'linear': lambda input: np.linspace ( *np.quantile(input[np.isfinite(input)], 
+                                                                        [alpha, 1.-alpha]), nbins),
+                    'log':lambda input: np.logspace ( *np.quantile(np.log10(input)[np.isfinite(np.log10(input))], 
+                                                                   [alpha, 1.-alpha]), nbins)}
+        bins = [scale_fns[xscale](x), scale_fns[yscale](y)]
+        
+
+    if zscale == 'log':
+        kwargs['norm'] = LogNorm ()
+    raw_counts = np.histogram2d ( x,y, bins=bins)[0] # counts, xbins, ybins
+    weighted_counts = np.histogram2d ( x,y, weights=metric, bins=bins )[0]
+    im=ax.pcolormesh(bins[0], bins[1], (weighted_counts/raw_counts).T, cmap=cmap, **kwargs)
+    
+    ax.set_xscale(xscale)
+    ax.set_yscale(yscale)
+    
+    if show_proj:
+        if proj_kwargs is None:
+            proj_kwargs = {}
+            
+        if 'color' not in proj_kwargs.keys():
+            if isinstance(cmap, str):
+                cm = getattr(plt.cm, cmap)
+            else:
+                cm = cmap
+            proj_color = cm ( 0.3 )
+            proj_kwargs['color'] = proj_color
+
+        
+        hist ( x, bins=bins[0], ax=axarr[1], **proj_kwargs) 
+        axarr[1].set_xlim(ax.get_xlim())
+        hist ( y, bins=bins[1], orientation='horizontal', ax=axarr[2], **proj_kwargs)
+        axarr[2].set_ylim(ax.get_ylim())
+        
+        # \\ remove 0 that often clashes with main axes
+        xticklabels = axarr[2].get_xticklabels()
+        xticklabels[0] = ''
+        axarr[2].set_xticklabels(xticklabels)
+        yticklabels = axarr[1].get_yticklabels()
+        yticklabels[0] = ''
+        axarr[1].set_yticklabels(yticklabels)        
+    
+    return im, axarr
+
+
+
 
 def contour ( im, ax=None, **kwargs ):
     if ax is None:
@@ -620,7 +718,7 @@ def density_contour_scatter (data_x, data_y, ax=None, cmap='Greys', scatter_s=1,
     c_im, ax = density_contour ( data_x, data_y, ax, cmap=cmap, quantiles=quantiles, filled=filled, **kwargs )  
     return (s_im, c_im), ax
 
-def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False,binalpha=0.005, **kwargs):
+def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=None,filled=False,binalpha=0.005, xscale='linear', yscale='linear', **kwargs):
     """
     Draw contour lines or filled contours representing the density of data points.
 
@@ -653,7 +751,12 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
         ax = plt.subplot(111)
     
     
-    data_x, data_y = sampling.fmasker ( data_x, data_y) 
+    
+    if xscale=='log':
+        data_x = np.log10(data_x)
+    if yscale=='log':
+        data_y = np.log10(data_y)   
+    data_x, data_y = sampling.fmasker ( data_x, data_y)      
 
     xlim = np.quantile(data_x, [binalpha, 1.-binalpha])
     ylim = np.quantile(data_y, [binalpha, 1.-binalpha])
@@ -664,7 +767,7 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
     gkde = sampling.c_density ( data_x, data_y, return_fn=True, nmin=0 )
       
     grid_x = np.linspace(*xlim,npts)
-    grid_y = np.linspace(*ylim,npts)   
+    grid_y = np.linspace(*ylim,npts)
 
     vecx,vecy = np.meshgrid(grid_x, grid_y )
     vecz = gkde((vecx.ravel(),vecy.ravel())).reshape(vecx.shape)
@@ -693,6 +796,10 @@ def density_contour (data_x,data_y, ax=None, npts=100, label=None, quantiles=Non
         fn = ax.contourf
     else:
         fn = ax.contour
+    if xscale == 'log':
+        vecx = 10.**vecx
+    if yscale == 'log':
+        vecy = 10.**vecy
     im = fn ( vecx, vecy, vecz, **kwargs )    
     if label is not None:
         if 'cmap' not in kwargs.keys():
@@ -830,11 +937,11 @@ def running_quantile ( x,
     if show_counts:
         xmid, ystat, counts = out        
     else:   
-        if aggregation_mode=='binned': 
+        if aggregation_mode == 'binned': 
             xmid, ystat = out
             xlow = bins[:-1]
             xhigh = bins[1:]
-        elif aggregation_mode=='running':
+        elif aggregation_mode == 'running':
             midpts = midpoints(bins)
             xmid,ystat,dx = out
             xlow = midpts - dx
@@ -1396,3 +1503,60 @@ def arrow(x, y, dx, dy, ax=None, color='k', **kwargs):
         color=color,
         arrowprops=dict(arrowstyle='->', shrinkA=0., shrinkB=0., **kwargs)
     )    
+    
+def hatched_fill_between(x, y1, y2=0, ax=None, hatch='///', hatch_color='black',
+                          edgecolor='None', topbottom_color=None, topbottom_lw=2.,
+                          **kwargs):
+    """
+    Fill between y1 and y2 with hatch only (no facecolor), and draw thicker top/bottom edges.
+    
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axes to draw on.
+    x : array-like
+        X values.
+    y1, y2 : array-like or scalar
+        Y bounds.
+    hatch : str
+        Hatch pattern.
+    hatch_color : str
+        Color for the hatch.
+    edgecolor : str
+        Edge color for the hatch polygon (left/right edges). Use 'none' or alpha=0 for invisible.
+    topbottom_color : str
+        Color for the top/bottom outlines.
+    topbottom_lw : float
+        Line width for the top/bottom outlines.
+    **kwargs : dict
+        Additional kwargs passed to the Polygon.
+    """
+    if ax is None:
+        ax = plt.subplot(111)
+        
+    x = np.asarray(x)
+    y1 = np.asarray(y1)
+    y2 = np.full_like(x, y2) if np.isscalar(y2) else np.asarray(y2)
+    
+    if topbottom_color is None:
+        topbottom_color = hatch_color
+
+    # Create hatch polygon
+    verts = np.concatenate([
+        np.column_stack([x, y1]),
+        np.column_stack([x[::-1], y2[::-1]])
+    ])
+    poly = patches.Polygon(verts, facecolor='none', edgecolor=edgecolor,
+                   hatch=hatch, linewidth=0, **kwargs)
+    poly.set_facecolor('none')  # just to be safe
+    poly.set_edgecolor(hatch_color)
+    ax.add_patch(poly)
+    poly.set_clip_path(ax.patch)
+
+    # Add top (y2) and bottom (y1) lines manually
+    top = Line2D(x, y2, color=topbottom_color, linewidth=topbottom_lw, zorder=poly.get_zorder() + 1)
+    bottom = Line2D(x, y1, color=topbottom_color, linewidth=topbottom_lw, zorder=poly.get_zorder() + 1)
+    ax.add_line(top)
+    ax.add_line(bottom)
+
+    return poly, top, bottom
