@@ -1460,7 +1460,7 @@ def celestial_plot ( x, y, ax, **kwargs ):
     return im, ax
 
 
-def upper_or_lower_limit ( x, y, dx=0.1, dy=0.1, xscale='linear', yscale='linear', ax=None, **kwargs):
+def upper_or_lower_limit ( x, y, dx=0.1, dy=0.1, xscale='linear', yscale='linear', ax=None, label=None, color='k', **kwargs):
     if ax is None:
         ax = plt.subplot(111)
     
@@ -1477,6 +1477,7 @@ def upper_or_lower_limit ( x, y, dx=0.1, dy=0.1, xscale='linear', yscale='linear
         y,
         fn(x,dx,1),
         fn(x,dx,-1),
+        color=color,
         **kwargs
     )
     
@@ -1485,10 +1486,17 @@ def upper_or_lower_limit ( x, y, dx=0.1, dy=0.1, xscale='linear', yscale='linear
             '',
             xy=(x[_],y[_] + dy_fn(y[_],dy)),
             xytext=(x[_],y[_]),
-            arrowprops=dict(arrowstyle='->', shrinkA=0., shrinkB=0.,**kwargs),            
+            arrowprops=dict(arrowstyle='->', shrinkA=0., shrinkB=0., color=color, **kwargs),            
         )
+    
+    if label is not None:
+        from . import legend
+        lines = Line2D([],[],marker=r'$\rightarrow$', color=color, linestyle='', markersize=10 )
+        legend.add_to_legend(lines, label, ax)
+    
         
-def arrow(x, y, dx, dy, ax=None, color='k', **kwargs):
+        
+def arrow(x, y, dx, dy, ax=None, color='k', label=None,**kwargs):
     '''
     An implementation of arrow based on annotate to get around matplotlib's wonky
     arrow rules
@@ -1501,9 +1509,14 @@ def arrow(x, y, dx, dy, ax=None, color='k', **kwargs):
         xy=(x+dx,y+dy),
         xytext=(x, y),
         color=color,
-        arrowprops=dict(arrowstyle='->', shrinkA=0., shrinkB=0., **kwargs)
+        arrowprops=dict(arrowstyle='->', shrinkA=0., shrinkB=0., color=color, **kwargs),
     )    
-    
+
+    if label is not None:
+        from . import legend
+        lines = Line2D([],[],marker=r'$\rightarrow$', color=color, linestyle='', markersize=15 )
+        legend.add_to_legend(lines, label, ax)
+        
 def hatched_fill_between(x, y1, y2=0, ax=None, hatch='///', hatch_color='black',
                           edgecolor='None', topbottom_color=None, topbottom_lw=2.,
                           **kwargs):
@@ -1560,3 +1573,30 @@ def hatched_fill_between(x, y1, y2=0, ax=None, hatch='///', hatch_color='black',
     ax.add_line(bottom)
 
     return poly, top, bottom
+
+def reshuffle_legend(ax, new_order, **kwargs):
+    """
+    Rearrange the order of legend entries based on provided indices.
+    
+    Parameters:
+    -----------
+    ax : matplotlib.axes.Axes
+        The axes object containing the legend
+    new_order : list of int
+        List of indices specifying the new order of legend entries.
+        For example, [0,3,2,1] will put the 1st entry first, 4th entry second,
+        3rd entry third, and 2nd entry last.
+    
+    Example:
+    --------
+    reshuffle_legend(ax, [0,3,2,1])  # Reorder 4 legend entries
+    """
+    # Get current legend handles and labels
+    handles, labels = ax.get_legend_handles_labels()
+    
+    # Rearrange based on new_order
+    new_handles = [handles[i] for i in new_order]
+    new_labels = [labels[i] for i in new_order]
+    
+    # Update the legend with new order
+    ax.legend(handles=new_handles, labels=new_labels, **kwargs)
