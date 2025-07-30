@@ -446,7 +446,8 @@ def pcolor_avg2d (
         cmap = 'Greys',
         proj_kwargs=None,
         **kwargs
-    ):    
+    ):  
+    x,y,metric = sampling.fmasker(x,y,metric)  
     if ax is None:
         if show_proj:
             if figsize is None:
