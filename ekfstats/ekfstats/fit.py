@@ -4,6 +4,7 @@ from scipy.signal import correlate
 from scipy.integrate import fixed_quad
 from scipy.optimize import minimize, curve_fit
 from astropy.modeling.models import Sersic1D, Sersic2D, Const1D, Const2D
+from astropy.modeling.functional_models import Moffat2D
 from astropy.modeling.fitting import LevMarLSQFitter
 import emcee
 
@@ -263,6 +264,171 @@ def extract_component_parameters(fitted_model, n_components):
     # Multi-component case
     component_params = []
     param_names = ['amplitude', 'x_0', 'y_0', 'r_eff', 'n', 'ellip', 'theta']
+    
+    for i in range(n_components):
+        params = {}
+        for param in param_names:
+            # Access parameters by index for compound models
+            param_value = getattr(fitted_model, f"{param}_{i}").value
+            params[param] = param_value
+        component_params.append(params)
+    
+    return component_params
+
+
+def fit_multi_moffat_2d(image, init_x_0, init_y_0, psf_fwhm, dx=0., dy=0., 
+                        init_amplitude=None, fixed_parameters=None, nan_replace=0.):
+    """
+    Fit multiple Moffat 2D profiles (point sources) to an image with constrained position variations.
+    
+    Parameters:
+    -----------
+    image : array_like
+        2D image to fit
+    init_x_0 : list or array
+        Initial x positions for each Moffat component (point source)
+    init_y_0 : list or array  
+        Initial y positions for each Moffat component (point source)
+    psf_fwhm : float
+        Full Width at Half Maximum of the image PSF in pixels
+    dx : float, optional
+        Maximum allowed variation in x direction from initial positions (default: 0)
+    dy : float, optional
+        Maximum allowed variation in y direction from initial positions (default: 0)
+    init_amplitude : list, array, or float, optional
+        Initial amplitudes. If None, estimated from image values at positions (default: None)
+    fixed_parameters : dict, optional
+        Dictionary with component index as key and list of parameter names to fix as values
+        e.g., {0: ['gamma'], 1: ['alpha']}
+    nan_replace : float, optional
+        Value to replace NaNs with (default: 0.0)
+        
+    Returns:
+    --------
+    fitted_model : astropy compound model
+        The fitted multi-component Moffat model
+    model_image : array_like
+        2D array of the fitted model evaluated on the image grid
+    """
+    
+    # Handle NaNs
+    image = np.where(np.isnan(image), nan_replace, image)
+    y, x = np.mgrid[:image.shape[0], :image.shape[1]]
+    
+    # Convert inputs to lists and validate
+    init_x_0 = np.atleast_1d(init_x_0)
+    init_y_0 = np.atleast_1d(init_y_0)
+    n_components = len(init_x_0)
+    
+    if len(init_y_0) != n_components:
+        raise ValueError("init_x_0 and init_y_0 must have the same length")
+    
+    # Convert FWHM to gamma parameter for Moffat profile
+    # For Moffat profile: FWHM = 2 * gamma * sqrt(2^(1/alpha) - 1)
+    # Assuming alpha = 2.5 (typical for seeing-limited PSF), solve for gamma
+    alpha = 2.5
+    gamma = psf_fwhm / (2 * np.sqrt(2**(1/alpha) - 1))
+    
+    # Helper function to broadcast scalar parameters to all components
+    def broadcast_param(param, default_val, param_name):
+        if param is None:
+            return [default_val] * n_components
+        param = np.atleast_1d(param)
+        if len(param) == 1:
+            return [param[0]] * n_components
+        elif len(param) == n_components:
+            return list(param)
+        else:
+            raise ValueError(f"{param_name} must be scalar or have length {n_components}")
+    
+    # Handle amplitude - estimate from image if not provided
+    if init_amplitude is None:
+        init_amplitude_list = []
+        for i in range(n_components):
+            x_idx = int(np.clip(init_x_0[i], 0, image.shape[1]-1))
+            y_idx = int(np.clip(init_y_0[i], 0, image.shape[0]-1))
+            init_amplitude_list.append(image[y_idx, x_idx])
+    else:
+        init_amplitude_list = broadcast_param(init_amplitude, 1.0, 'init_amplitude')
+    
+    # Create individual Moffat models
+    moffat_models = []
+    for i in range(n_components):
+        moffat = Moffat2D(
+            amplitude=init_amplitude_list[i],
+            x_0=init_x_0[i],
+            y_0=init_y_0[i], 
+            gamma=gamma,
+            alpha=alpha
+        )
+        
+        # Set bounds for this component
+        moffat.bounds.update({
+            'amplitude': (init_amplitude_list[i] * 0.1, np.inf),
+            'x_0': (init_x_0[i] - dx, init_x_0[i] + dx),
+            'y_0': (init_y_0[i] - dy, init_y_0[i] + dy),
+            'gamma': (gamma * 0.5, gamma * 2.0),  # Allow some variation in PSF size
+            'alpha': (1.0, 10.0)  # Reasonable range for Moffat alpha parameter
+        })
+        
+        # Fix gamma parameter by default to maintain input FWHM
+        moffat.gamma.fixed = True
+        
+        # Apply additional fixed parameters if specified
+        if fixed_parameters is not None and i in fixed_parameters:
+            for param in fixed_parameters[i]:
+                setattr(getattr(moffat, param), 'fixed', True)
+        
+        moffat_models.append(moffat)
+    
+    # Create compound model
+    if n_components == 1:
+        compound_model = moffat_models[0]
+    else:
+        compound_model = moffat_models[0]
+        for i in range(1, n_components):
+            compound_model = compound_model + moffat_models[i]
+    
+    # Fit the model
+    fitter = LevMarLSQFitter()
+    fitted_model = fitter(compound_model, x, y, image)
+    
+    # Generate model image
+    model_image = fitted_model(x, y)
+    
+    return fitted_model, model_image
+
+
+# Convenience function to extract individual Moffat component parameters
+def extract_moffat_component_parameters(fitted_model, n_components):
+    """
+    Extract parameters for individual Moffat components from a fitted compound model.
+    
+    Parameters:
+    -----------
+    fitted_model : astropy compound model
+        The fitted multi-component Moffat model
+    n_components : int
+        Number of Moffat components
+        
+    Returns:
+    --------
+    component_params : list of dicts
+        List containing parameter dictionaries for each component
+    """
+    if n_components == 1:
+        # Single component case
+        return [{
+            'amplitude': fitted_model.amplitude.value,
+            'x_0': fitted_model.x_0.value,
+            'y_0': fitted_model.y_0.value,
+            'gamma': fitted_model.gamma.value,
+            'alpha': fitted_model.alpha.value
+        }]
+    
+    # Multi-component case
+    component_params = []
+    param_names = ['amplitude', 'x_0', 'y_0', 'gamma', 'alpha']
     
     for i in range(n_components):
         params = {}
