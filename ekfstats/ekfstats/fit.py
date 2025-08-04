@@ -93,6 +93,187 @@ def fit_sersic_2d(image, init_n=1., init_r_eff=None, init_ellip=0.5, init_theta=
     im = fitted_model(x,y)
     return fitted_model, im
 
+def fit_multi_sersic_2d(image, init_x_0, init_y_0, dx=0., dy=0., 
+                        init_n=None, init_r_eff=None, init_ellip=None, 
+                        init_theta=None, init_amplitude=None,
+                        fixed_parameters=None, nan_replace=0.):
+    """
+    Fit multiple Sersic 2D profiles to an image with constrained position variations.
+    
+    Parameters:
+    -----------
+    image : array_like
+        2D image to fit
+    init_x_0 : list or array
+        Initial x positions for each Sersic component
+    init_y_0 : list or array  
+        Initial y positions for each Sersic component
+    dx : float, optional
+        Maximum allowed variation in x direction from initial positions (default: 0)
+    dy : float, optional
+        Maximum allowed variation in y direction from initial positions (default: 0)
+    init_n : list, array, or float, optional
+        Initial Sersic indices. If scalar, same value used for all components (default: 1.0)
+    init_r_eff : list, array, or float, optional
+        Initial effective radii. If None, estimated from image size (default: None)
+    init_ellip : list, array, or float, optional
+        Initial ellipticities. If scalar, same value used for all components (default: 0.5)
+    init_theta : list, array, or float, optional
+        Initial position angles. If scalar, same value used for all components (default: 0.0)
+    init_amplitude : list, array, or float, optional
+        Initial amplitudes. If None, estimated from image values at positions (default: None)
+    fixed_parameters : dict, optional
+        Dictionary with component index as key and list of parameter names to fix as values
+        e.g., {0: ['n', 'theta'], 1: ['ellip']}
+    nan_replace : float, optional
+        Value to replace NaNs with (default: 0.0)
+        
+    Returns:
+    --------
+    fitted_model : astropy compound model
+        The fitted multi-component Sersic model
+    model_image : array_like
+        2D array of the fitted model evaluated on the image grid
+    """
+    
+    # Handle NaNs
+    image = np.where(np.isnan(image), nan_replace, image)
+    y, x = np.mgrid[:image.shape[0], :image.shape[1]]
+    
+    # Convert inputs to lists and validate
+    init_x_0 = np.atleast_1d(init_x_0)
+    init_y_0 = np.atleast_1d(init_y_0)
+    n_components = len(init_x_0)
+    
+    if len(init_y_0) != n_components:
+        raise ValueError("init_x_0 and init_y_0 must have the same length")
+    
+    # Helper function to broadcast scalar parameters to all components
+    def broadcast_param(param, default_val, param_name):
+        if param is None:
+            return [default_val] * n_components
+        param = np.atleast_1d(param)
+        if len(param) == 1:
+            return [param[0]] * n_components
+        elif len(param) == n_components:
+            return list(param)
+        else:
+            raise ValueError(f"{param_name} must be scalar or have length {n_components}")
+    
+    # Set up parameter lists
+    init_n_list = broadcast_param(init_n, 1.0, 'init_n')
+    init_ellip_list = broadcast_param(init_ellip, 0.5, 'init_ellip')
+    init_theta_list = broadcast_param(init_theta, 0.0, 'init_theta')
+    
+    # Handle r_eff - estimate if not provided
+    if init_r_eff is None:
+        default_r_eff = min(image.shape) / 10
+        init_r_eff_list = [default_r_eff] * n_components
+    else:
+        init_r_eff_list = broadcast_param(init_r_eff, min(image.shape) / 10, 'init_r_eff')
+    
+    # Handle amplitude - estimate from image if not provided
+    if init_amplitude is None:
+        init_amplitude_list = []
+        for i in range(n_components):
+            x_idx = int(np.clip(init_x_0[i], 0, image.shape[1]-1))
+            y_idx = int(np.clip(init_y_0[i], 0, image.shape[0]-1))
+            init_amplitude_list.append(image[y_idx, x_idx])
+    else:
+        init_amplitude_list = broadcast_param(init_amplitude, 1.0, 'init_amplitude')
+    
+    # Create individual Sersic models
+    sersic_models = []
+    for i in range(n_components):
+        sersic = Sersic2D(
+            amplitude=init_amplitude_list[i],
+            x_0=init_x_0[i],
+            y_0=init_y_0[i], 
+            r_eff=init_r_eff_list[i],
+            n=init_n_list[i],
+            ellip=init_ellip_list[i],
+            theta=init_theta_list[i]
+        )
+        
+        # Set bounds for this component
+        sersic.bounds.update({
+            'amplitude': (init_amplitude_list[i] * 0.1, np.inf),
+            'x_0': (init_x_0[i] - dx, init_x_0[i] + dx),
+            'y_0': (init_y_0[i] - dy, init_y_0[i] + dy),
+            'r_eff': (0, max(image.shape) / 2),
+            'n': (0.1, 10),
+            'ellip': (0, 0.99),
+            'theta': (-np.pi, np.pi)
+        })
+        
+        # Apply fixed parameters if specified
+        if fixed_parameters is not None and i in fixed_parameters:
+            for param in fixed_parameters[i]:
+                setattr(getattr(sersic, param), 'fixed', True)
+        
+        sersic_models.append(sersic)
+    
+    # Create compound model
+    if n_components == 1:
+        compound_model = sersic_models[0]
+    else:
+        compound_model = sersic_models[0]
+        for i in range(1, n_components):
+            compound_model = compound_model + sersic_models[i]
+    
+    # Fit the model
+    fitter = LevMarLSQFitter()
+    fitted_model = fitter(compound_model, x, y, image)
+    
+    # Generate model image
+    model_image = fitted_model(x, y)
+    
+    return fitted_model, model_image
+
+
+# Convenience function to extract individual component parameters
+def extract_component_parameters(fitted_model, n_components):
+    """
+    Extract parameters for individual components from a fitted compound model.
+    
+    Parameters:
+    -----------
+    fitted_model : astropy compound model
+        The fitted multi-component model
+    n_components : int
+        Number of Sersic components
+        
+    Returns:
+    --------
+    component_params : list of dicts
+        List containing parameter dictionaries for each component
+    """
+    if n_components == 1:
+        # Single component case
+        return [{
+            'amplitude': fitted_model.amplitude.value,
+            'x_0': fitted_model.x_0.value,
+            'y_0': fitted_model.y_0.value,
+            'r_eff': fitted_model.r_eff.value,
+            'n': fitted_model.n.value,
+            'ellip': fitted_model.ellip.value,
+            'theta': fitted_model.theta.value
+        }]
+    
+    # Multi-component case
+    component_params = []
+    param_names = ['amplitude', 'x_0', 'y_0', 'r_eff', 'n', 'ellip', 'theta']
+    
+    for i in range(n_components):
+        params = {}
+        for param in param_names:
+            # Access parameters by index for compound models
+            param_value = getattr(fitted_model, f"{param}_{i}").value
+            params[param] = param_value
+        component_params.append(params)
+    
+    return component_params
+
 class BaseInferer (object):
     def __init__(self) -> None:
         self.has_intrinsic_dispersion = False
