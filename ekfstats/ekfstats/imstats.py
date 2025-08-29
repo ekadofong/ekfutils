@@ -110,3 +110,93 @@ def build_ellipsed_segmentationmap ( sep_catalog, cutout_shape ):
         isegmap = build_ellipse_from_sep ( sep_catalog[cid], cutout_shape, )
         segmap[isegmap>0] |= 1 << cid
     return segmap
+
+def bspline_star(x, step):
+    """
+    FROM https://github.com/broxtronix/pymultiscale/blob/master/pymultiscale/starlet.py
+    
+    This implements the starlet kernel. Application to different scales is
+    accomplished via the step parameter.
+    """
+    ndim = len(x.shape)
+    C1 = 1./16.
+    C2 = 4./16.
+    C3 = 6./16.
+    KSize = 4*step+1
+    KS2 = KSize/2
+    kernel = np.zeros((KSize), dtype = np.float32)
+    if KSize == 1:
+        kernel[0] = 1.0
+    else:
+        kernel[0] = C1
+        kernel[KSize-1] = C1
+        kernel[KS2+step] = C2
+        kernel[KS2-step] = C2
+        kernel[KS2] = C3
+
+    # Based on benchmarks conducted during January 2015, OpenCV has a far faster
+    # seperabable convolution routine than scipy does.  We use it for 2D images
+    if ndim == 2:
+        import cv2
+        result = cv2.sepFilter2D(x, cv2.CV_32F, kernelX = kernel, kernelY = kernel)
+        return result
+
+    else:
+        result = x
+        import scipy.ndimage
+        for dim in np.arange(ndim):
+            result = scipy.ndimage.filters.convolve1d(result, kernel, axis = dim, mode='reflect', cval = 0.0)
+    return result
+
+
+# -----------------------------------------------------------------------------
+#                            FUNCTION API
+# -----------------------------------------------------------------------------
+
+def starlet_transform(input_image, num_bands = None, gen2 = True):
+    '''
+    FROM https://github.com/broxtronix/pymultiscale/blob/master/pymultiscale/starlet.py
+    
+    Computes the starlet transform of an image (i.e. undecimated isotropic
+    wavelet transform).
+
+    The output is a python list containing the sub-bands. If the keyword Gen2 is set,
+    then it is the 2nd generation starlet transform which is computed: i.e. g = Id - h*h
+    instead of g = Id - h.
+
+    REFERENCES:
+    [1] J.L. Starck and F. Murtagh, "Image Restoration with Noise Suppression Using the Wavelet Transform",
+    Astronomy and Astrophysics, 288, pp-343-348, 1994.
+
+    For the modified STARLET transform:
+    [2] J.-L. Starck, J. Fadili and F. Murtagh, "The Undecimated Wavelet Decomposition
+        and its Reconstruction", IEEE Transaction on Image Processing,  16,  2, pp 297--309, 2007.
+
+    This code is based on the STAR2D IDL function written by J.L. Starck.
+            http://www.multiresolutions.com/sparsesignalrecipes/software.html
+
+    '''
+
+    if num_bands == None:
+        num_bands = int(np.ceil(np.log2(np.min(input_image.shape))) - 3)
+        assert num_bands > 0
+
+    ndim = len(input_image.shape)
+
+    im_in = input_image.astype(np.float32)
+    step_trou = 1
+    im_out = None
+    WT = []
+
+    for band in np.arange(num_bands):
+        im_out = bspline_star(im_in, step_trou)
+        if gen2:  # Gen2 starlet applies smoothing twice
+            WT.append(im_in - bspline_star(im_out, step_trou))
+        else:
+            test = im_in - im_out
+            WT.append(im_in - im_out)
+        im_in = im_out
+        step_trou *= 2
+
+    WT.append(im_out)
+    return WT

@@ -1306,6 +1306,77 @@ def histstack (
                 label=None, 
                 type='histogram'                                          
                 ):
+    """
+    Create a stacked histogram visualization showing distributions of y-values across x-bins.
+    
+    This function creates a series of histograms stacked along the x-axis, where each histogram
+    shows the distribution of y-values within a specific x-bin. The histograms are positioned
+    at their corresponding x-values and can optionally display quantile lines and use color
+    coding based on sample count.
+    
+    Parameters
+    ----------
+    x : array-like
+        Independent variable values used for binning the data
+    y : array-like  
+        Dependent variable values whose distributions will be plotted
+    w : array-like, optional
+        Weights for each data point. If provided, weighted histograms are computed
+    ax : matplotlib.axes.Axes, optional
+        Axes object to plot on. If None, creates a new subplot
+    xbins : int or array-like, default 10
+        Binning for x-values. If int, creates that many evenly-spaced bins.
+        If array, uses those bin edges
+    ybins : int or array-like, default 10
+        Binning for y-values in each histogram. If int, creates that many bins.
+        If array, uses those bin edges
+    binalpha : float, default 0.05
+        Fraction of data to exclude from each end when auto-generating bin ranges
+    show_quantile : bool, default True
+        Whether to overlay quantile lines on each histogram
+    quantiles : list, default [0.16, 0.5, 0.84]
+        Quantile values to display as horizontal lines (typically 16th, 50th, 84th percentiles)
+    quantile_kwargs : dict, default {}
+        Additional styling options for quantile lines
+    color : str or ColorBase, default 'k'
+        Base color for the histograms. Can be matplotlib color string or ColorBase object
+    edgecolor : str, optional
+        Color for histogram edges. If None, uses a darker version of base color
+    facecolor : str, optional
+        Color for histogram fill. If None, uses a lighter version of base color
+    quantilecolor : str, optional
+        Color for quantile lines. If None, uses a much darker version of base color
+    linewidth : float, default 1
+        Width of histogram outline
+    stretch : float, default 1.2
+        Scaling factor for histogram width relative to x-bin size
+    color_by_count : bool, default True
+        Whether to adjust color intensity based on number of points in each bin
+    label : str, optional
+        Legend label for the plot
+    type : str, default 'histogram'
+        Plot type (currently only 'histogram' is supported)
+        
+    Returns
+    -------
+    tuple
+        ((xbins, ybins), ax) where xbins and ybins are the bin edges used,
+        and ax is the matplotlib axes object
+        
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+    >>> x = np.random.normal(0, 1, 1000)
+    >>> y = x + np.random.normal(0, 0.5, 1000)
+    >>> histstack(x, y, xbins=8, ybins=15)
+    >>> plt.show()
+    
+    Create weighted histograms with custom colors:
+    >>> weights = np.random.exponential(1, 1000)
+    >>> histstack(x, y, w=weights, color='blue', show_quantile=False)
+    >>> plt.show()
+    """
     if ax is None:
         ax = plt.subplot(111)
 
