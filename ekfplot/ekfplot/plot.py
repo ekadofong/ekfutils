@@ -1364,7 +1364,7 @@ def histstack (
         cfacecolor = ec.ColorBase(cfacecolor).modulate(fc_modulate)
         cquantilecolor = ec.ColorBase(cquantilecolor).modulate(ec_modulate)
             
-        out = ax.plot(
+        out = ax.step(
             ys - shift, 
             ybins[1:], 
             color=cedgecolor.base,
