@@ -122,8 +122,10 @@ def bspline_star(x, step):
     C1 = 1./16.
     C2 = 4./16.
     C3 = 6./16.
+
     KSize = 4*step+1
-    KS2 = KSize/2
+    KS2 = KSize//2
+    
     kernel = np.zeros((KSize), dtype = np.float32)
     if KSize == 1:
         kernel[0] = 1.0
@@ -200,3 +202,43 @@ def starlet_transform(input_image, num_bands = None, gen2 = True):
 
     WT.append(im_out)
     return WT
+
+def inverse_starlet_transform(coefs, gen2 = True):
+    '''
+    Computes the inverse starlet transform of an image (i.e. undecimated
+    isotropic wavelet transform).
+
+    The input is a python list containing the sub-bands. If the keyword Gen2 is
+    set, then it is the 2nd generation starlet transform which is computed: i.e.
+    g = Id - h*h instead of g = Id - h.
+
+    REFERENCES:
+    [1] J.L. Starck and F. Murtagh, "Image Restoration with Noise Suppression Using the Wavelet Transform",
+        Astronomy and Astrophysics, 288, pp-343-348, 1994.
+
+    For the modified STARLET transform:
+    [2] J.-L. Starck, J. Fadili and F. Murtagh, "The Undecimated Wavelet Decomposition
+        and its Reconstruction", IEEE Transaction on Image Processing,  16,  2, pp 297--309, 2007.
+
+    This code is based on the ISTAR2D IDL function written by J.L. Starck.
+            http://www.multiresolutions.com/sparsesignalrecipes/software.html
+    '''
+
+    # Gen1 starlet can be reconstructed simply by summing the coefficients at each scale.
+    if not gen2:
+        recon_img = np.zeros_like(coefs[0])
+        for i in np.arange(len(coefs)):
+            recon_img += coefs[i]
+
+    # Gen2 starlet requires more careful reconstruction.
+    else:
+        num_bands = len(coefs)-1
+        recon_img = coefs[-1]
+        step_trou = int(np.power(2, num_bands - 1))
+
+        for i in reversed(range(num_bands)):
+            im_temp = bspline_star(recon_img, step_trou)
+            recon_img = im_temp + coefs[i]
+            step_trou = step_trou//2
+
+    return recon_img
