@@ -913,6 +913,8 @@ def fit_ridgeline(x, y, weights=None, order=3, regularization=0.01, return_stats
     used for extracting ridgelines or curves from image data where weights can be
     derived from pixel intensities.
     
+    Based off of: https://stackoverflow.com/questions/52802648/how-do-i-fit-a-line-to-a-cluster-of-pixels
+    
     Parameters:
     -----------
     x : array_like
