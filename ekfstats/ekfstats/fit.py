@@ -373,6 +373,7 @@ def fit_multi_moffat_2d(image, init_x_0, init_y_0, psf_fwhm, dx=0., dy=0.,
         
         # Fix gamma parameter by default to maintain input FWHM
         moffat.gamma.fixed = True
+        moffat.alpha.fixed = True
         
         # Apply additional fixed parameters if specified
         if fixed_parameters is not None and i in fixed_parameters:
