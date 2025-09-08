@@ -902,4 +902,329 @@ def logistic_loglikelihood ( theta, data ):
     #pq = a / (1. + np.exp(-(var-mu)/s) ) + floor
     pq = logistic_fn(var, *theta)
     lnP = np.sum(weights*np.where(labels==1, np.log(pq), np.log(1.-pq)))
-    return lnP   
+    return lnP
+
+
+def fit_ridgeline(x, y, weights=None, order=3, regularization=0.01, return_stats=False):
+    """
+    Fit a polynomial ridgeline (curve) to 2D data using weighted ridge regression.
+    
+    This function fits a polynomial of specified order to (x,y) coordinates, typically
+    used for extracting ridgelines or curves from image data where weights can be
+    derived from pixel intensities.
+    
+    Parameters:
+    -----------
+    x : array_like
+        X-coordinates of data points (1D array)
+    y : array_like  
+        Y-coordinates of data points (1D array)
+    weights : array_like, optional
+        Weights for each data point. If None, uses uniform weights.
+        Should have same length as x and y.
+    order : int, optional
+        Polynomial order for the fit. Default: 3 (cubic polynomial)
+    regularization : float, optional
+        L2 regularization parameter (alpha). Larger values create smoother curves.
+        Default: 0.01
+    return_stats : bool, optional
+        If True, return additional fitting statistics. Default: False
+        
+    Returns:
+    --------
+    coefficients : array
+        Polynomial coefficients [c0, c1, c2, ..., c_order] for 
+        y = c0 + c1*x + c2*x^2 + ... + c_order*x^order
+    predict_func : callable
+        Function that takes x values and returns predicted y values
+    stats : dict, optional
+        Dictionary with fitting statistics (R², residuals, condition number)
+        Only returned if return_stats=True
+        
+    Examples:
+    ---------
+    >>> # Fit cubic polynomial to noisy curve
+    >>> x = np.linspace(0, 10, 50)
+    >>> y_true = 0.1*x**3 - 0.5*x**2 + 2*x + 1
+    >>> y_noisy = y_true + 0.5*np.random.randn(50)
+    >>> coeffs, predict_func = fit_ridgeline(x, y_noisy, order=3)
+    >>> y_pred = predict_func(x)
+    
+    >>> # Fit with intensity-based weights
+    >>> weights = np.abs(y_noisy)  # Use absolute values as weights
+    >>> coeffs, predict_func = fit_ridgeline(x, y_noisy, weights=weights)
+    """
+    
+    # Convert to numpy arrays
+    x = np.asarray(x).ravel()
+    y = np.asarray(y).ravel()
+    
+    if len(x) != len(y):
+        raise ValueError("x and y must have the same length")
+    
+    n_points = len(x)
+    if n_points < order + 1:
+        raise ValueError(f"Need at least {order + 1} points for order {order} polynomial")
+    
+    # Remove NaN/inf values
+    finite_mask = np.isfinite(x) & np.isfinite(y)
+    if not np.any(finite_mask):
+        raise ValueError("No finite data points found")
+    
+    x_clean = x[finite_mask]
+    y_clean = y[finite_mask]
+    n_clean = len(x_clean)
+    
+    if n_clean < order + 1:
+        raise ValueError(f"After removing non-finite values, need at least {order + 1} points")
+    
+    # Generate polynomial feature matrix A = [1, x, x^2, ..., x^order]
+    def _generate_features(x_vals, poly_order):
+        """Generate polynomial feature matrix"""
+        x_vals = x_vals.reshape(-1, 1)
+        return np.power(x_vals, np.arange(poly_order + 1).reshape(1, -1))
+    
+    A = _generate_features(x_clean, order)
+    
+    # Handle weights
+    if weights is None:
+        # Uniform weights
+        W = np.eye(n_clean)
+        w_diag = np.ones(n_clean)
+    else:
+        weights = np.asarray(weights).ravel()
+        if len(weights) != len(x):
+            raise ValueError("Weights array must have same length as input data")
+        
+        w_clean = weights[finite_mask]
+        w_diag = np.abs(w_clean)  # Ensure positive weights
+        
+        if np.sum(w_diag) == 0:
+            raise ValueError("All weights are zero")
+        
+        # Normalize weights to preserve scale
+        w_diag = w_diag / np.mean(w_diag)
+        W = np.diag(w_diag)
+    
+    # Ridge regression: w = (A^T W A + α I)^(-1) A^T W y
+    AtWA = A.T @ W @ A
+    AtWy = A.T @ W @ y_clean
+    
+    if regularization > 0:
+        AtWA += regularization * np.eye(AtWA.shape[0])
+    
+    # Check condition number
+    cond_num = np.linalg.cond(AtWA)
+    if cond_num > 1e12:
+        import warnings
+        warnings.warn(f"Feature matrix is ill-conditioned (cond={cond_num:.2e}). "
+                     "Consider increasing regularization.", RuntimeWarning)
+    
+    # Solve for coefficients
+    try:
+        coefficients = np.linalg.solve(AtWA, AtWy)
+    except np.linalg.LinAlgError:
+        coefficients = np.linalg.pinv(AtWA) @ AtWy
+    
+    # Create prediction function
+    def predict_func(x_new):
+        """Predict y values for new x coordinates"""
+        x_new = np.asarray(x_new)
+        A_new = _generate_features(x_new, order)
+        return A_new @ coefficients
+    
+    # Calculate statistics if requested
+    if return_stats:
+        # Predictions on training data
+        y_pred_clean = A @ coefficients
+        residuals_clean = y_clean - y_pred_clean
+        
+        # Weighted sum of squared residuals
+        wssr = residuals_clean.T @ W @ residuals_clean
+        
+        # Total weighted sum of squares (for R²)
+        y_mean_weighted = np.sum(w_diag * y_clean) / np.sum(w_diag)
+        wtss = np.sum(w_diag * (y_clean - y_mean_weighted)**2)
+        
+        # R-squared
+        r_squared = 1 - wssr / wtss if wtss > 0 else 0.0
+        
+        # Create full residuals array (NaN where original data was NaN)
+        residuals_full = np.full(len(x), np.nan)
+        residuals_full[finite_mask] = residuals_clean
+        
+        stats = {
+            'r_squared': r_squared,
+            'residuals': residuals_full,
+            'condition_number': cond_num,
+            'n_points': n_clean,
+            'wssr': wssr,
+            'rmse': np.sqrt(wssr / n_clean),
+            'coefficients': coefficients,
+            'order': order
+        }
+        
+        return coefficients, predict_func, stats
+    
+    return coefficients, predict_func
+
+def fit_ridgeline_image(image, mask, weight_mode='intensity', order=3, regularization=0.01, 
+                       return_stats=False, coordinate_system='image'):
+    """
+    Fit a polynomial ridgeline to marked pixels in an image using weighted ridge regression.
+    
+    This function extracts coordinates from a binary mask and fits a polynomial curve
+    to the marked region, with weights typically derived from pixel intensities.
+    
+    Parameters:
+    -----------
+    image : array_like
+        2D image array containing intensity values
+    mask : array_like
+        2D binary mask array (same shape as image) where True/1 indicates 
+        pixels to include in the fit
+    weight_mode : str or array_like, optional
+        How to compute weights:
+        - 'intensity': Use normalized image intensities as weights (default)
+        - 'uniform': Use uniform weights (equivalent to unweighted fit)
+        - array: Custom weight array with same shape as image
+    order : int, optional
+        Polynomial order for the fit. Default: 3 (cubic polynomial)
+    regularization : float, optional
+        L2 regularization parameter. Larger values create smoother curves.
+        Default: 0.01
+    return_stats : bool, optional
+        If True, return additional fitting statistics. Default: False
+    coordinate_system : str, optional
+        Coordinate system convention:
+        - 'image': x=column indices, y=row indices (origin at top-left)
+        - 'cartesian': x=column indices, y=row indices with origin at bottom-left
+        Default: 'image'
+        
+    Returns:
+    --------
+    coefficients : array
+        Polynomial coefficients for y = c0 + c1*x + c2*x^2 + ... + c_order*x^order
+    predict_func : callable
+        Function that takes x values and returns predicted y values
+    fitted_coordinates : dict
+        Dictionary containing:
+        - 'x': x-coordinates of fitted pixels
+        - 'y': y-coordinates of fitted pixels  
+        - 'weights': weights used for fitting
+    stats : dict, optional
+        Dictionary with fitting statistics (only if return_stats=True)
+        
+    Examples:
+    ---------
+    >>> # Create sample image and mask
+    >>> image = np.random.rand(100, 150)
+    >>> mask = np.zeros_like(image, dtype=bool)
+    >>> mask[40:60, :] = True  # Horizontal band
+    >>> 
+    >>> # Fit ridgeline with intensity weighting
+    >>> coeffs, predict_func, coords = fit_ridgeline_image(image, mask)
+    >>> 
+    >>> # Predict ridgeline for new x coordinates
+    >>> x_new = np.arange(0, image.shape[1])
+    >>> y_pred = predict_func(x_new)
+    >>> 
+    >>> # Plot results
+    >>> import matplotlib.pyplot as plt
+    >>> plt.figure(figsize=(10, 6))
+    >>> plt.imshow(image, origin='upper', alpha=0.7)
+    >>> plt.scatter(coords['x'], coords['y'], c=coords['weights'], s=10)
+    >>> plt.plot(x_new, y_pred, 'r-', linewidth=2, label='Fitted ridgeline')
+    >>> plt.legend()
+    """
+    
+    # Convert inputs to numpy arrays
+    image = np.asarray(image)
+    mask = np.asarray(mask, dtype=bool)
+    
+    if image.shape != mask.shape:
+        raise ValueError("Image and mask must have the same shape")
+    
+    if image.ndim != 2:
+        raise ValueError("Image must be 2D")
+    
+    # Get coordinates of masked pixels
+    # np.argwhere returns (row, col) pairs
+    pixel_coords = np.argwhere(mask)
+    
+    if len(pixel_coords) == 0:
+        raise ValueError("No pixels found in mask")
+    
+    # Extract row and column indices
+    rows = pixel_coords[:, 0]  # y-coordinates in image space
+    cols = pixel_coords[:, 1]  # x-coordinates in image space
+    
+    # Handle coordinate system
+    if coordinate_system == 'image':
+        # Standard image coordinates: origin at top-left, y increases downward
+        x = cols
+        y = rows
+    elif coordinate_system == 'cartesian':
+        # Cartesian coordinates: origin at bottom-left, y increases upward
+        x = cols
+        y = image.shape[0] - 1 - rows  # Flip y-axis
+    else:
+        raise ValueError("coordinate_system must be 'image' or 'cartesian'")
+    
+    # Extract pixel intensities for the masked region
+    intensities = image[mask]
+    
+    # Handle weights
+    if isinstance(weight_mode, str):
+        if weight_mode == 'intensity':
+            # Use normalized intensities as weights
+            weights = np.abs(intensities)
+            if np.max(weights) > 0:
+                weights = weights / np.max(weights)  # Normalize to [0, 1]
+            else:
+                weights = np.ones_like(weights)  # Fallback if all intensities are zero
+        elif weight_mode == 'uniform':
+            weights = None  # Will use uniform weights in fit_ridgeline
+        else:
+            raise ValueError("weight_mode must be 'intensity', 'uniform', or an array")
+    else:
+        # Custom weight array provided
+        weight_array = np.asarray(weight_mode)
+        if weight_array.shape != image.shape:
+            raise ValueError("Custom weight array must have same shape as image")
+        weights = weight_array[mask]
+    
+    # Check if we have enough points
+    if len(x) < order + 1:
+        raise ValueError(f"Need at least {order + 1} pixels for order {order} polynomial, "
+                        f"but only {len(x)} pixels found in mask")
+    
+    # Fit the ridgeline using the core function
+    if return_stats:
+        coefficients, predict_func, stats = fit_ridgeline(
+            x, y, weights=weights, order=order, 
+            regularization=regularization, return_stats=True
+        )
+        # Add image-specific info to stats
+        stats['coordinate_system'] = coordinate_system
+        stats['weight_mode'] = weight_mode
+        stats['mask_pixel_count'] = len(x)
+    else:
+        coefficients, predict_func = fit_ridgeline(
+            x, y, weights=weights, order=order, 
+            regularization=regularization, return_stats=False
+        )
+    
+    # Prepare coordinate information for return
+    fitted_coordinates = {
+        'x': x,
+        'y': y, 
+        'weights': weights if weights is not None else np.ones_like(x),
+        'intensities': intensities,
+        'pixel_coords': pixel_coords  # Original (row, col) indices
+    }
+    
+    if return_stats:
+        return coefficients, predict_func, fitted_coordinates, stats
+    
+    return coefficients, predict_func, fitted_coordinates   
