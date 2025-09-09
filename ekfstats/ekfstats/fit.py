@@ -15,9 +15,16 @@ from . import functions as ef
 from . import sampling 
 
 
+class EKFSersic2D (Sersic2D):
+    @property
+    def luminosity ( self ):
+        from scipy.special import gammaincinv, gammainc
+        bn = gammaincinv(2.0 * self.n.value, 0.5)
 
-   
-    
+        x = np.inf
+        term = np.exp(bn)/(bn**(2.*self.n.value))*gammainc(2.*self.n.value, x)
+        luminosity = self.amplitude.value * self.r_eff.value**2 * 2. * np.pi * self.n.value * term
+        return luminosity
 
 def fit_sersic_1d(radius, intensity, init_n=1., init_r_eff=None, init_const=0., fixed_parameters=None):
     if init_r_eff is None:        
@@ -67,7 +74,7 @@ def fit_sersic_2d(image, init_n=1., init_r_eff=None, init_ellip=0.5, init_theta=
         init_r_eff = min(image.shape) / 10    
         print(init_r_eff)    
 
-    sersic_init = Sersic2D(
+    sersic_init = EKFSersic2D(
         amplitude=init_amplitude, 
         x_0=init_x_0, 
         y_0=init_y_0, 
@@ -80,6 +87,7 @@ def fit_sersic_2d(image, init_n=1., init_r_eff=None, init_ellip=0.5, init_theta=
         for param in fixed_parameters:
             #sersic_init.x_0.fixed = True
             setattr(getattr(sersic_init, param), 'fixed', True)
+                    
                 
     sersic_init.bounds.update ({
         'amplitude': (init_amplitude*0.1, np.inf),
@@ -1071,8 +1079,16 @@ def fit_ridgeline(x, y, weights=None, order=3, regularization=0.01, return_stats
     
     return coefficients, predict_func
 
-def fit_ridgeline_image(image, mask, weight_mode='intensity', order=3, regularization=0.01, 
-                       return_stats=False, coordinate_system='image'):
+def fit_ridgeline_image(image, 
+                        mask=None, 
+                        weight_mode='intensity', 
+                        order=3, 
+                        regularization=0.01, 
+                        return_stats=False, 
+                        coordinate_system='image',
+                        x=None,
+                        y=None
+                        ):
     """
     Fit a polynomial ridgeline to marked pixels in an image using weighted ridge regression.
     
@@ -1140,6 +1156,8 @@ def fit_ridgeline_image(image, mask, weight_mode='intensity', order=3, regulariz
     >>> plt.plot(x_new, y_pred, 'r-', linewidth=2, label='Fitted ridgeline')
     >>> plt.legend()
     """
+    if mask is None:
+        mask = np.ones_like(image,dtype=bool)
     
     # Convert inputs to numpy arrays
     image = np.asarray(image)
@@ -1163,7 +1181,12 @@ def fit_ridgeline_image(image, mask, weight_mode='intensity', order=3, regulariz
     cols = pixel_coords[:, 1]  # x-coordinates in image space
     
     # Handle coordinate system
-    if coordinate_system == 'image':
+    if x is not None:
+        assert y is not None, ("Both x and y must be supplied to override image coordinates.")
+        # Interpolate pixel indices to real coordinates
+        x = np.interp(cols, np.arange(len(x)), x)
+        y = np.interp(rows, np.arange(len(y)), y)
+    elif coordinate_system == 'image':
         # Standard image coordinates: origin at top-left, y increases downward
         x = cols
         y = rows
