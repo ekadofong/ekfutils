@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from scipy.spatial import cKDTree
 
@@ -87,3 +88,55 @@ def ls_2ptcorr(target_catalog, random_catalog, r_bins, pos_cols=['RA', 'DEC']):
     r_centers = 0.5 * (r_bins[1:] + r_bins[:-1])
     
     return xi, r_centers
+
+def angle_between_slopes(m1, m2, return_degrees=True):
+    """
+    Calculate the angle between two lines given their slopes.
+    
+    Args:
+        m1 (float): Slope of the first line
+        m2 (float): Slope of the second line
+        return_degrees (bool): If True, return angle in degrees; if False, return in radians
+    
+    Returns:
+        float: The acute angle between the two lines
+    
+    Raises:
+        ValueError: If both slopes are equal (parallel lines) or if the calculation
+                   results in parallel vertical lines
+    """
+    
+    # Check if lines are parallel
+    if m1 == m2:
+        return 0.0  # Parallel lines have 0 angle between them
+    
+    # Handle vertical lines (infinite slope)
+    if math.isinf(m1) and math.isinf(m2):
+        return 0.0  # Both vertical lines are parallel
+    elif math.isinf(m1):
+        # First line is vertical, angle with second line
+        angle_rad = abs(math.atan(1/m2)) if m2 != 0 else math.pi/2
+    elif math.isinf(m2):
+        # Second line is vertical, angle with first line
+        angle_rad = abs(math.atan(1/m1)) if m1 != 0 else math.pi/2
+    else:
+        # Standard case: use the angle between slopes formula
+        # tan(θ) = |(m1 - m2) / (1 + m1*m2)|
+        numerator = abs(m1 - m2)
+        denominator = 1 + (m1 * m2)
+        
+        # Check if lines are perpendicular (denominator = 0)
+        if abs(denominator) < 1e-10:  # Using small epsilon for floating point comparison
+            angle_rad = math.pi / 2  # 90 degrees
+        else:
+            angle_rad = math.atan(numerator / abs(denominator))
+    
+    # Ensure we return the acute angle (0 to 90 degrees)
+    if angle_rad > math.pi / 2:
+        angle_rad = math.pi - angle_rad
+    
+    # Convert to degrees if requested
+    if return_degrees:
+        return math.degrees(angle_rad)
+    else:
+        return angle_rad
