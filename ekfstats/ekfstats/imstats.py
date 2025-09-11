@@ -242,3 +242,36 @@ def inverse_starlet_transform(coefs, gen2 = True):
             step_trou = step_trou//2
 
     return recon_img
+
+
+def mask_sersic_to_reff(x_0, y_0, r_eff, ellip, theta, imshape, n_reff=1):
+    """
+    Direct conversion using existing Sersic2D object
+    
+    Args:
+        csource: Already instantiated Sersic2D object
+        fmap_shape: Shape of the output array
+        n_reff (int): Multiplier for effective radius
+    
+    Returns:
+        np.ndarray: Boolean array where True indicates r < n*R_eff
+    """
+    # Create coordinate grids
+    y, x = np.mgrid[:fmap_shape[0], :fmap_shape[1]]
+    
+    # Calculate elliptical distance
+    cos_theta = np.cos(np.radians(theta))
+    sin_theta = np.sin(np.radians(theta))
+    
+    x_shifted = x - x_0
+    y_shifted = y - y_0
+    
+    x_rot = x_shifted * cos_theta + y_shifted * sin_theta
+    y_rot = -x_shifted * sin_theta + y_shifted * cos_theta
+    
+    # Avoid ellipticity = 1 (infinitely thin ellipse)
+    ellip_safe = min(ellip, 0.99)
+    
+    r_elliptical = np.sqrt(x_rot**2 + (y_rot / (1 - ellip_safe))**2)
+    
+    return r_elliptical < (n_reff * r_eff)
