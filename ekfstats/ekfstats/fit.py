@@ -18,11 +18,10 @@ from . import sampling
 class EKFSersic2D (Sersic2D):
     @property
     def luminosity ( self ):
-        from scipy.special import gammaincinv, gammainc
+        from scipy.special import gammaincinv, gammainc, gamma
         bn = gammaincinv(2.0 * self.n.value, 0.5)
 
-        x = np.inf
-        term = np.exp(bn)/(bn**(2.*self.n.value))*gammainc(2.*self.n.value, x)
+        term = np.exp(bn)/(bn**(2.*self.n.value))*gamma(2.*n)
         luminosity = self.amplitude.value * self.r_eff.value**2 * 2. * np.pi * self.n.value * term
         return luminosity
 

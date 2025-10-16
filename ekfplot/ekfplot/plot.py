@@ -1672,3 +1672,50 @@ def reshuffle_legend(ax, new_order, **kwargs):
     
     # Update the legend with new order
     ax.legend(handles=new_handles, labels=new_labels, **kwargs)
+    
+    
+def sync_axis_limits(axes, which='both'):
+    """
+    Set all axes limits to the smallest min and largest max seen across subplots.
+    
+    Parameters
+    ----------
+    axes : list or array-like
+        List of matplotlib axes objects (subplots)
+    which : str, optional
+        Which axes to synchronize: 'x', 'y', or 'both' (default: 'both')
+    
+    Examples
+    --------
+    >>> fig, axes = plt.subplots(2, 2)
+    >>> # ... plot data on each subplot ...
+    >>> sync_axis_limits(axes.flatten(), which='both')
+    """
+    # Flatten axes if it's a 2D array
+    if hasattr(axes, 'flatten'):
+        axes = axes.flatten()
+    
+    # Convert to list if needed
+    axes = list(axes)
+    
+    if which in ('x', 'both'):
+        # Find global x limits
+        x_mins = [ax.get_xlim()[0] for ax in axes]
+        x_maxs = [ax.get_xlim()[1] for ax in axes]
+        global_x_min = min(x_mins)
+        global_x_max = max(x_maxs)
+        
+        # Apply to all axes
+        for ax in axes:
+            ax.set_xlim(global_x_min, global_x_max)
+    
+    if which in ('y', 'both'):
+        # Find global y limits
+        y_mins = [ax.get_ylim()[0] for ax in axes]
+        y_maxs = [ax.get_ylim()[1] for ax in axes]
+        global_y_min = min(y_mins)
+        global_y_max = max(y_maxs)
+        
+        # Apply to all axes
+        for ax in axes:
+            ax.set_ylim(global_y_min, global_y_max)

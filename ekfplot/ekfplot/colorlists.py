@@ -26,11 +26,11 @@ london_rail_colors = {
 }
 
 hcbold = {
-    'red':'#e66a4e',
-	'orange':'#eb7f2c',
-	'green':'#6fb087',
-	'blue':'#65a7c5',
-	'grey':'#c6caca',    
+    'red':"#f13f17",
+	'orange':"#ff6f00",
+	'green':"#04df54",
+	'blue':"#07a0e7",
+	'grey':"#858585",    
 }
 
 coolwarm2025 = {
